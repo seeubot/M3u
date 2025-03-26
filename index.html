@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JW Player with Playlist and Grid View</title>
+    <title>JW Player with M3U Playlist Support</title>
     <script src="https://content.jwplatform.com/libraries/SAHhwvZq.js"></script>
     <style>
         body {
@@ -28,7 +28,7 @@
             aspect-ratio: 16 / 9;
             background-color: #000;
         }
-        #playlist-input {
+        #m3u-input {
             width: 100%;
             padding: 10px;
             margin-bottom: 10px;
@@ -63,8 +63,8 @@
     <div class="container">
         <div id="player-section">
             <div id="jwplayerDiv"></div>
-            <input type="text" id="playlist-input" placeholder="Enter playlist URL">
-            <button onclick="loadPlaylistFromURL()">Load Playlist</button>
+            <textarea id="m3u-input" rows="5" placeholder="Paste M3U playlist here"></textarea>
+            <button onclick="loadM3UPlaylist()">Load M3U Playlist</button>
         </div>
         <div id="playlist-section">
             <div id="playlist-grid"></div>
@@ -72,25 +72,19 @@
     </div>
 
     <script>
-        // Default playlist
+        // Default playlist item
         const defaultPlaylist = [
             {
-                title: "Video 1",
-                file: "https://delta1tatasky.akamaized.net/out/i/2970531.mpd",
+                title: "Sun Music",
+                file: "https://livestream.sunnxt.com/585bb66e95c84ccea3f828c96b3567b5/SunMusicB_IN_index.mpd",
                 type: "dash",
-                image: "/api/placeholder/150/100",
+                image: "https://sund-images.sunnxt.com/194410/640x360_SunMusic_194410_d4d08876-9d23-432c-aab4-b5c70c58aaac.jpg",
                 drm: {
                     "clearkey": {
-                        "keyId": "81cad7ff124348669eb94781c4747071",
-                        "key": "901055c461f3569401ca8f910ea405bb"
+                        "keyId": "21ddc14c4da94c079d4f4c343ecdcd80",
+                        "key": "5701bee4ee9b625d0c8ed7de032a7478"
                     }
                 }
-            },
-            {
-                title: "Video 2",
-                file: "https://example.com/video2.mpd",
-                type: "dash",
-                image: "/api/placeholder/150/100"
             }
         ];
 
@@ -103,6 +97,62 @@
             aspectratio: '16:9'
         });
 
+        // Parse M3U playlist
+        function parseM3UPlaylist(m3uContent) {
+            const lines = m3uContent.split('\n');
+            const playlist = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Skip empty lines and comments
+                if (!line || line.startsWith('#EXTM3U') || line.startsWith('#')) continue;
+
+                // Check for extended info
+                if (line.startsWith('#EXTINF:')) {
+                    const extinfoMatch = line.match(/#EXTINF:-1.*tvg-logo="([^"]*)".*group-title="([^"]*)"(.+)/);
+                    const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+                    
+                    if (extinfoMatch && nextLine) {
+                        const title = extinfoMatch[3].trim();
+                        const logo = extinfoMatch[1];
+                        const groupTitle = extinfoMatch[2];
+
+                        // Extract Kodi properties
+                        const kodiProps = {};
+                        const propLines = lines.slice(0, i).filter(l => l.startsWith('KODIPROP:'));
+                        propLines.forEach(propLine => {
+                            const [key, value] = propLine.replace('KODIPROP:', '').split('=');
+                            kodiProps[key.trim()] = value.trim();
+                        });
+
+                        // Prepare playlist item
+                        const playlistItem = {
+                            title: title,
+                            file: nextLine,
+                            type: "dash",
+                            image: logo
+                        };
+
+                        // Add DRM if license key is present
+                        if (kodiProps['inputstream.adaptive.license_key']) {
+                            const [keyId, key] = kodiProps['inputstream.adaptive.license_key'].split(':');
+                            playlistItem.drm = {
+                                "clearkey": {
+                                    "keyId": keyId,
+                                    "key": key
+                                }
+                            };
+                        }
+
+                        playlist.push(playlistItem);
+                    }
+                }
+            }
+
+            return playlist;
+        }
+
         // Render playlist grid
         function renderPlaylistGrid() {
             const gridContainer = document.getElementById('playlist-grid');
@@ -112,7 +162,7 @@
                 const playlistItem = document.createElement('div');
                 playlistItem.className = 'playlist-item';
                 playlistItem.innerHTML = `
-                    <img src="${item.image}" alt="${item.title}">
+                    <img src="${item.image || '/api/placeholder/150/100'}" alt="${item.title}">
                     <div>${item.title}</div>
                 `;
                 playlistItem.onclick = () => {
@@ -122,32 +172,30 @@
             });
         }
 
-        // Load playlist from URL
-        async function loadPlaylistFromURL() {
-            const playlistInput = document.getElementById('playlist-input');
-            const playlistURL = playlistInput.value.trim();
+        // Load M3U Playlist
+        function loadM3UPlaylist() {
+            const m3uInput = document.getElementById('m3u-input');
+            const m3uContent = m3uInput.value.trim();
 
-            if (!playlistURL) {
-                alert('Please enter a valid playlist URL');
+            if (!m3uContent) {
+                alert('Please paste an M3U playlist');
                 return;
             }
 
             try {
-                const response = await fetch(playlistURL);
-                const newPlaylist = await response.json();
+                // Parse M3U and update playlist
+                currentPlaylist = parseM3UPlaylist(m3uContent);
 
-                // Validate playlist structure
-                if (!Array.isArray(newPlaylist) || newPlaylist.length === 0) {
-                    throw new Error('Invalid playlist format');
+                if (currentPlaylist.length === 0) {
+                    throw new Error('No valid playlist items found');
                 }
 
                 // Update player and grid
-                currentPlaylist = newPlaylist;
                 player.load(currentPlaylist);
                 renderPlaylistGrid();
             } catch (error) {
-                console.error('Error loading playlist:', error);
-                alert('Failed to load playlist. Please check the URL and try again.');
+                console.error('Error parsing M3U playlist:', error);
+                alert('Failed to parse playlist. Please check the M3U format.');
             }
         }
 
