@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JW Player with M3U Playlist Support</title>
+    <title>JW Player with M3U URL Loader</title>
     <script src="https://content.jwplatform.com/libraries/SAHhwvZq.js"></script>
     <style>
         body {
@@ -28,7 +28,7 @@
             aspect-ratio: 16 / 9;
             background-color: #000;
         }
-        #m3u-input {
+        #m3u-url-input {
             width: 100%;
             padding: 10px;
             margin-bottom: 10px;
@@ -57,14 +57,20 @@
             height: auto;
             margin-bottom: 10px;
         }
+        #loading-indicator {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div id="player-section">
             <div id="jwplayerDiv"></div>
-            <textarea id="m3u-input" rows="5" placeholder="Paste M3U playlist here"></textarea>
-            <button onclick="loadM3UPlaylist()">Load M3U Playlist</button>
+            <input type="text" id="m3u-url-input" placeholder="Enter M3U Playlist URL">
+            <button onclick="loadM3UFromURL()">Load Playlist</button>
+            <div id="loading-indicator">Loading playlist...</div>
         </div>
         <div id="playlist-section">
             <div id="playlist-grid"></div>
@@ -72,32 +78,13 @@
     </div>
 
     <script>
-        // Default playlist item
-        const defaultPlaylist = [
-            {
-                title: "Sun Music",
-                file: "https://livestream.sunnxt.com/585bb66e95c84ccea3f828c96b3567b5/SunMusicB_IN_index.mpd",
-                type: "dash",
-                image: "https://sund-images.sunnxt.com/194410/640x360_SunMusic_194410_d4d08876-9d23-432c-aab4-b5c70c58aaac.jpg",
-                drm: {
-                    "clearkey": {
-                        "keyId": "21ddc14c4da94c079d4f4c343ecdcd80",
-                        "key": "5701bee4ee9b625d0c8ed7de032a7478"
-                    }
-                }
-            }
-        ];
-
-        let currentPlaylist = defaultPlaylist;
-
         // Initialize JW Player
         const player = jwplayer("jwplayerDiv").setup({
-            playlist: currentPlaylist,
             width: '100%',
             aspectratio: '16:9'
         });
 
-        // Parse M3U playlist
+        // Parse M3U playlist from text content
         function parseM3UPlaylist(m3uContent) {
             const lines = m3uContent.split('\n');
             const playlist = [];
@@ -106,7 +93,7 @@
                 const line = lines[i].trim();
                 
                 // Skip empty lines and comments
-                if (!line || line.startsWith('#EXTM3U') || line.startsWith('#')) continue;
+                if (!line || line.startsWith('#EXTM3U') || line === '') continue;
 
                 // Check for extended info
                 if (line.startsWith('#EXTINF:')) {
@@ -131,7 +118,7 @@
                             title: title,
                             file: nextLine,
                             type: "dash",
-                            image: logo
+                            image: logo || '/api/placeholder/150/100'
                         };
 
                         // Add DRM if license key is present
@@ -154,53 +141,63 @@
         }
 
         // Render playlist grid
-        function renderPlaylistGrid() {
+        function renderPlaylistGrid(playlist) {
             const gridContainer = document.getElementById('playlist-grid');
             gridContainer.innerHTML = '';
 
-            currentPlaylist.forEach((item, index) => {
+            playlist.forEach((item, index) => {
                 const playlistItem = document.createElement('div');
                 playlistItem.className = 'playlist-item';
                 playlistItem.innerHTML = `
-                    <img src="${item.image || '/api/placeholder/150/100'}" alt="${item.title}">
+                    <img src="${item.image}" alt="${item.title}">
                     <div>${item.title}</div>
                 `;
                 playlistItem.onclick = () => {
-                    player.playlistItem(index);
+                    player.load([item]);
                 };
                 gridContainer.appendChild(playlistItem);
             });
         }
 
-        // Load M3U Playlist
-        function loadM3UPlaylist() {
-            const m3uInput = document.getElementById('m3u-input');
-            const m3uContent = m3uInput.value.trim();
+        // Load M3U Playlist from URL
+        async function loadM3UFromURL() {
+            const m3uUrlInput = document.getElementById('m3u-url-input');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const playlistURL = m3uUrlInput.value.trim();
 
-            if (!m3uContent) {
-                alert('Please paste an M3U playlist');
+            if (!playlistURL) {
+                alert('Please enter a valid M3U playlist URL');
                 return;
             }
 
             try {
-                // Parse M3U and update playlist
-                currentPlaylist = parseM3UPlaylist(m3uContent);
+                // Show loading indicator
+                loadingIndicator.style.display = 'block';
 
-                if (currentPlaylist.length === 0) {
+                // Fetch M3U playlist
+                const response = await fetch(playlistURL);
+                const m3uContent = await response.text();
+
+                // Parse M3U and update playlist
+                const playlist = parseM3UPlaylist(m3uContent);
+
+                if (playlist.length === 0) {
                     throw new Error('No valid playlist items found');
                 }
 
                 // Update player and grid
-                player.load(currentPlaylist);
-                renderPlaylistGrid();
+                renderPlaylistGrid(playlist);
+                
+                // Load first item by default
+                player.load([playlist[0]]);
             } catch (error) {
-                console.error('Error parsing M3U playlist:', error);
-                alert('Failed to parse playlist. Please check the M3U format.');
+                console.error('Error loading M3U playlist:', error);
+                alert('Failed to load playlist. Please check the URL and try again.');
+            } finally {
+                // Hide loading indicator
+                loadingIndicator.style.display = 'none';
             }
         }
-
-        // Initial grid rendering
-        renderPlaylistGrid();
     </script>
 </body>
 </html>
