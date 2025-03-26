@@ -43,6 +43,13 @@
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
+        .error-display {
+            background-color: #8b0000;
+            color: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
         .channel-info {
             background-color: #0f3460;
             padding: 10px;
@@ -132,6 +139,7 @@
 <body>
     <div class="container">
         <div class="player-section">
+            <div id="errorDisplay" class="error-display" style="display:none;"></div>
             <video id="videoPlayer" controls autoplay></video>
             <div id="channelInfo" class="channel-info">
                 <img id="channelLogo" class="channel-logo" src="" alt="Channel Logo">
@@ -161,9 +169,24 @@
         const playlistUrlInput = document.getElementById('playlistUrl');
         const channelNameEl = document.getElementById('channelName');
         const channelLogoEl = document.getElementById('channelLogo');
+        const errorDisplay = document.getElementById('errorDisplay');
+
+        // Display error message
+        function showError(message) {
+            errorDisplay.textContent = message;
+            errorDisplay.style.display = 'block';
+            console.error(message);
+        }
+
+        // Hide error message
+        function hideError() {
+            errorDisplay.textContent = '';
+            errorDisplay.style.display = 'none';
+        }
 
         // Handle file upload
         function handleFileUpload(event) {
+            hideError();
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
@@ -176,9 +199,10 @@
 
         // Load playlist from URL
         async function loadPlaylistFromUrl() {
+            hideError();
             const url = playlistUrlInput.value.trim();
             if (!url) {
-                alert('Please enter a valid URL');
+                showError('Please enter a valid URL');
                 return;
             }
 
@@ -207,8 +231,7 @@
                 loadingIndicator.style.display = 'none';
                 
                 // Show error message
-                alert(`Error loading playlist: ${error.message}`);
-                console.error('Playlist loading error:', error);
+                showError(`Error loading playlist: ${error.message}`);
             }
         }
 
@@ -218,8 +241,14 @@
             currentPlaylist = [];
             playlistContainer.innerHTML = '';
 
-            // Split the content into lines
-            const lines = content.split('\n');
+            // Ensure content is a string
+            if (typeof content !== 'string') {
+                showError('Invalid playlist content');
+                return;
+            }
+
+            // Split the content into lines, handling different line endings
+            const lines = content.split(/\r?\n/);
             let currentChannel = {
                 name: '',
                 logo: '',
@@ -227,43 +256,54 @@
                 properties: {}
             };
 
-            lines.forEach(line => {
-                line = line.trim();
+            lines.forEach((rawLine, index) => {
+                // Trim the line and skip if empty
+                const line = rawLine ? rawLine.trim() : '';
                 
-                // Skip comments and empty lines
-                if (!line || line.startsWith('#EXTM3U') || line.startsWith('##')) return;
+                // Skip empty lines and M3U header
+                if (!line || line.startsWith('#EXTM3U')) return;
                 
-                // Check for Kodi properties
-                if (line.startsWith('#KODIPROP:')) {
-                    const [key, value] = line.replace('#KODIPROP:', '').split('=');
-                    currentChannel.properties[key.trim()] = value.trim();
-                }
-                // Check for extended info
-                else if (line.startsWith('#EXTINF:')) {
-                    // Extract channel details
-                    const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-                    const nameMatch = line.match(/-1,(.+)$/);
-                    
-                    currentChannel.logo = logoMatch ? logoMatch[1] : '';
-                    currentChannel.name = nameMatch ? nameMatch[1].trim() : 'Unknown Channel';
-                }
-                // Check for VLC options
-                else if (line.startsWith('#EXTVLCOPT:')) {
-                    const [key, value] = line.replace('#EXTVLCOPT:', '').split(':');
-                    currentChannel.properties[key.trim()] = value.trim();
-                }
-                // Check for stream URL
-                else if (line.startsWith('http') || line.includes('.mpd')) {
-                    currentChannel.url = line;
-                    
-                    // Add to playlist and reset current channel
-                    currentPlaylist.push({...currentChannel});
-                    currentChannel = {
-                        name: '',
-                        logo: '',
-                        url: '',
-                        properties: {}
-                    };
+                try {
+                    // Check for Kodi properties
+                    if (line.startsWith('#KODIPROP:')) {
+                        const propParts = line.replace('#KODIPROP:', '').split('=');
+                        if (propParts.length === 2) {
+                            currentChannel.properties[propParts[0].trim()] = propParts[1].trim();
+                        }
+                    }
+                    // Check for extended info
+                    else if (line.startsWith('#EXTINF:')) {
+                        // Extract channel details using regex
+                        const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+                        const nameMatch = line.match(/-1,(.+)$/);
+                        
+                        currentChannel.logo = logoMatch ? logoMatch[1] : '';
+                        currentChannel.name = nameMatch ? nameMatch[1].trim() : 'Unknown Channel';
+                    }
+                    // Check for VLC options
+                    else if (line.startsWith('#EXTVLCOPT:')) {
+                        const optParts = line.replace('#EXTVLCOPT:', '').split(':');
+                        if (optParts.length === 2) {
+                            currentChannel.properties[optParts[0].trim()] = optParts[1].trim();
+                        }
+                    }
+                    // Check for stream URL
+                    else if ((line.startsWith('http') || line.includes('.mpd')) && line.length > 10) {
+                        currentChannel.url = line;
+                        
+                        // Add to playlist and reset current channel
+                        if (currentChannel.url) {
+                            currentPlaylist.push({...currentChannel});
+                            currentChannel = {
+                                name: '',
+                                logo: '',
+                                url: '',
+                                properties: {}
+                            };
+                        }
+                    }
+                } catch (parseError) {
+                    console.warn(`Error parsing line ${index}: ${line}`, parseError);
                 }
             });
 
@@ -276,7 +316,7 @@
             playlistContainer.innerHTML = '';
             
             if (currentPlaylist.length === 0) {
-                playlistContainer.innerHTML = '<p style="text-align:center;color:#888;">No channels found</p>';
+                showError('No channels found in the playlist');
                 return;
             }
 
@@ -336,14 +376,14 @@
                 // Attempt to play
                 videoPlayer.play().catch(error => {
                     console.error('Error playing video:', error);
-                    alert('Error loading the stream. Check console for details.');
+                    showError('Error loading the stream. Check console for details.');
                 });
             }
         }
 
         // Error handling for video
         videoPlayer.onerror = function() {
-            alert('Error loading the stream. Please check the URL or your internet connection.');
+            showError('Error loading the stream. Please check the URL or your internet connection.');
         };
     </script>
 </body>
