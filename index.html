@@ -3,415 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced M3U DRM TV Player</title>
-    <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.1/dist/dash.all.min.js"></script>
+    <title>JW Player with Playlist and Grid View</title>
+    <script src="https://content.jwplatform.com/libraries/SAHhwvZq.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
         body {
-            font-family: 'Arial', sans-serif;
-            background-color: #1a1a2e;
-            color: #ffffff;
-            line-height: 1.6;
-        }
-        .container {
+            font-family: Arial, sans-serif;
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
             display: flex;
             gap: 20px;
         }
-        .player-section {
+        #player-section {
             flex: 2;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
         }
-        .playlist-section {
+        #playlist-section {
             flex: 1;
-            background-color: #16213e;
-            border-radius: 10px;
-            padding: 15px;
-            max-height: 80vh;
-            overflow-y: auto;
         }
-        #videoPlayer {
+        #jwplayerDiv {
             width: 100%;
-            height: 500px;
+            aspect-ratio: 16 / 9;
             background-color: #000;
-            border-radius: 10px;
         }
-        .error-display {
-            background-color: #8b0000;
-            color: white;
+        #playlist-input {
+            width: 100%;
             padding: 10px;
             margin-bottom: 10px;
-            border-radius: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
-        .channel-info {
-            background-color: #0f3460;
-            padding: 10px;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
+        #playlist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 10px;
-        }
-        .channel-logo {
-            max-width: 50px;
-            max-height: 50px;
-            border-radius: 5px;
         }
         .playlist-item {
-            background-color: #0f3460;
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 5px;
             cursor: pointer;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            text-align: center;
+            background-color: white;
             transition: background-color 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .playlist-item img {
-            max-width: 40px;
-            max-height: 40px;
-            border-radius: 5px;
         }
         .playlist-item:hover {
-            background-color: #e94560;
+            background-color: #f0f0f0;
         }
-        .playlist-item.active {
-            background-color: #e94560;
-            font-weight: bold;
-        }
-        #fileInput {
-            display: none;
-        }
-        .input-group {
-            display: flex;
-            margin-bottom: 15px;
-            gap: 10px;
-        }
-        .input-group input {
-            flex-grow: 1;
-            padding: 10px;
-            background-color: #0f3460;
-            border: none;
-            color: white;
-            border-radius: 5px;
-        }
-        .button {
-            background-color: #0f3460;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            text-align: center;
-            transition: background-color 0.3s ease;
-        }
-        .button:hover {
-            background-color: #e94560;
-        }
-        .file-upload {
-            margin-bottom: 15px;
-        }
-        #loadingIndicator {
-            display: none;
-            text-align: center;
-            color: #e94560;
-            margin-top: 10px;
-        }
-        @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-            .input-group {
-                flex-direction: column;
-            }
-            .input-group input, .input-group .button {
-                width: 100%;
-            }
+        .playlist-item img {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="player-section">
-            <div id="errorDisplay" class="error-display" style="display:none;"></div>
-            <video id="videoPlayer" controls></video>
-            <div id="channelInfo" class="channel-info">
-                <img id="channelLogo" class="channel-logo" src="" alt="Channel Logo">
-                <span id="channelName">Select a channel</span>
-            </div>
+        <div id="player-section">
+            <div id="jwplayerDiv"></div>
+            <input type="text" id="playlist-input" placeholder="Enter playlist URL">
+            <button onclick="loadPlaylistFromURL()">Load Playlist</button>
         </div>
-        <div class="playlist-section">
-            <div class="input-group">
-                <input type="text" id="playlistUrl" placeholder="Enter M3U Playlist URL">
-                <div class="button" onclick="loadPlaylistFromUrl()">Load URL</div>
-            </div>
-            <div class="file-upload button" onclick="document.getElementById('fileInput').click()">
-                Upload M3U Playlist
-            </div>
-            <input type="file" id="fileInput" accept=".m3u" onchange="handleFileUpload(event)">
-            <div id="loadingIndicator">Loading playlist...</div>
-            <div id="playlist"></div>
+        <div id="playlist-section">
+            <div id="playlist-grid"></div>
         </div>
     </div>
 
     <script>
-        // Global variables
-        let currentPlaylist = [];
-        const videoPlayer = document.getElementById('videoPlayer');
-        const playlistContainer = document.getElementById('playlist');
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        const playlistUrlInput = document.getElementById('playlistUrl');
-        const channelNameEl = document.getElementById('channelName');
-        const channelLogoEl = document.getElementById('channelLogo');
-        const errorDisplay = document.getElementById('errorDisplay');
-        let dashPlayer = null;
-
-        // Display error message
-        function showError(message) {
-            errorDisplay.textContent = message;
-            errorDisplay.style.display = 'block';
-            console.error(message);
-        }
-
-        // Hide error message
-        function hideError() {
-            errorDisplay.textContent = '';
-            errorDisplay.style.display = 'none';
-        }
-
-        // Handle file upload
-        function handleFileUpload(event) {
-            hideError();
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    parseM3UPlaylist(e.target.result);
-                };
-                reader.readAsText(file);
+        // Default playlist
+        const defaultPlaylist = [
+            {
+                title: "Video 1",
+                file: "https://delta1tatasky.akamaized.net/out/i/2970531.mpd",
+                type: "dash",
+                image: "/api/placeholder/150/100",
+                drm: {
+                    "clearkey": {
+                        "keyId": "81cad7ff124348669eb94781c4747071",
+                        "key": "901055c461f3569401ca8f910ea405bb"
+                    }
+                }
+            },
+            {
+                title: "Video 2",
+                file: "https://example.com/video2.mpd",
+                type: "dash",
+                image: "/api/placeholder/150/100"
             }
+        ];
+
+        let currentPlaylist = defaultPlaylist;
+
+        // Initialize JW Player
+        const player = jwplayer("jwplayerDiv").setup({
+            playlist: currentPlaylist,
+            width: '100%',
+            aspectratio: '16:9'
+        });
+
+        // Render playlist grid
+        function renderPlaylistGrid() {
+            const gridContainer = document.getElementById('playlist-grid');
+            gridContainer.innerHTML = '';
+
+            currentPlaylist.forEach((item, index) => {
+                const playlistItem = document.createElement('div');
+                playlistItem.className = 'playlist-item';
+                playlistItem.innerHTML = `
+                    <img src="${item.image}" alt="${item.title}">
+                    <div>${item.title}</div>
+                `;
+                playlistItem.onclick = () => {
+                    player.playlistItem(index);
+                };
+                gridContainer.appendChild(playlistItem);
+            });
         }
 
         // Load playlist from URL
-        async function loadPlaylistFromUrl() {
-            hideError();
-            const url = playlistUrlInput.value.trim();
-            if (!url) {
-                showError('Please enter a valid URL');
+        async function loadPlaylistFromURL() {
+            const playlistInput = document.getElementById('playlist-input');
+            const playlistURL = playlistInput.value.trim();
+
+            if (!playlistURL) {
+                alert('Please enter a valid playlist URL');
                 return;
             }
 
             try {
-                // Show loading indicator
-                loadingIndicator.style.display = 'block';
-                
-                // Fetch the playlist
-                const response = await fetch(url);
-                
-                // Check if the request was successful
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                const response = await fetch(playlistURL);
+                const newPlaylist = await response.json();
+
+                // Validate playlist structure
+                if (!Array.isArray(newPlaylist) || newPlaylist.length === 0) {
+                    throw new Error('Invalid playlist format');
                 }
-                
-                // Get the text content
-                const content = await response.text();
-                
-                // Parse the playlist
-                parseM3UPlaylist(content);
-                
-                // Hide loading indicator
-                loadingIndicator.style.display = 'none';
+
+                // Update player and grid
+                currentPlaylist = newPlaylist;
+                player.load(currentPlaylist);
+                renderPlaylistGrid();
             } catch (error) {
-                // Hide loading indicator
-                loadingIndicator.style.display = 'none';
-                
-                // Show error message
-                showError(`Error loading playlist: ${error.message}`);
+                console.error('Error loading playlist:', error);
+                alert('Failed to load playlist. Please check the URL and try again.');
             }
         }
 
-        // Parse M3U playlist
-        function parseM3UPlaylist(content) {
-            // Reset previous playlist
-            currentPlaylist = [];
-            playlistContainer.innerHTML = '';
-
-            // Ensure content is a string
-            if (typeof content !== 'string') {
-                showError('Invalid playlist content');
-                return;
-            }
-
-            // Split the content into lines, handling different line endings
-            const lines = content.split(/\r?\n/);
-            let currentChannel = {
-                name: '',
-                logo: '',
-                url: '',
-                properties: {}
-            };
-
-            lines.forEach((rawLine, index) => {
-                // Trim the line and skip if empty
-                const line = rawLine ? rawLine.trim() : '';
-                
-                // Skip empty lines and M3U header
-                if (!line || line.startsWith('#EXTM3U')) return;
-                
-                try {
-                    // Check for Kodi properties
-                    if (line.startsWith('#KODIPROP:')) {
-                        const propParts = line.replace('#KODIPROP:', '').split('=');
-                        if (propParts.length === 2) {
-                            currentChannel.properties[propParts[0].trim()] = propParts[1].trim();
-                        }
-                    }
-                    // Check for extended info
-                    else if (line.startsWith('#EXTINF:')) {
-                        // Extract channel details using regex
-                        const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-                        const nameMatch = line.match(/-1,(.+)$/);
-                        
-                        currentChannel.logo = logoMatch ? logoMatch[1] : '';
-                        currentChannel.name = nameMatch ? nameMatch[1].trim() : 'Unknown Channel';
-                    }
-                    // Check for VLC options
-                    else if (line.startsWith('#EXTVLCOPT:')) {
-                        const optParts = line.replace('#EXTVLCOPT:', '').split(':');
-                        if (optParts.length === 2) {
-                            currentChannel.properties[optParts[0].trim()] = optParts[1].trim();
-                        }
-                    }
-                    // Check for stream URL
-                    else if ((line.startsWith('http') || line.includes('.mpd')) && line.length > 10) {
-                        currentChannel.url = line;
-                        
-                        // Add to playlist and reset current channel
-                        if (currentChannel.url) {
-                            currentPlaylist.push({...currentChannel});
-                            currentChannel = {
-                                name: '',
-                                logo: '',
-                                url: '',
-                                properties: {}
-                            };
-                        }
-                    }
-                } catch (parseError) {
-                    console.warn(`Error parsing line ${index}: ${line}`, parseError);
-                }
-            });
-
-            // Render playlist
-            renderPlaylist();
-        }
-
-        // Render playlist items
-        function renderPlaylist() {
-            playlistContainer.innerHTML = '';
-            
-            if (currentPlaylist.length === 0) {
-                showError('No channels found in the playlist');
-                return;
-            }
-
-            currentPlaylist.forEach((channel, index) => {
-                const channelElement = document.createElement('div');
-                channelElement.classList.add('playlist-item');
-                
-                // Add logo if available
-                if (channel.logo) {
-                    const logoImg = document.createElement('img');
-                    logoImg.src = channel.logo;
-                    logoImg.alt = channel.name;
-                    channelElement.appendChild(logoImg);
-                }
-                
-                // Add channel name
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = channel.name;
-                channelElement.appendChild(nameSpan);
-                
-                // Add click event
-                channelElement.onclick = () => playChannel(index);
-                playlistContainer.appendChild(channelElement);
-            });
-
-            // Play first channel if available
-            if (currentPlaylist.length > 0) {
-                playChannel(0);
-            }
-        }
-
-        // Play selected channel
-        function playChannel(index) {
-            if (index >= 0 && index < currentPlaylist.length) {
-                const channel = currentPlaylist[index];
-                
-                // Remove active class from all items
-                const playlistItems = document.querySelectorAll('.playlist-item');
-                playlistItems.forEach(item => item.classList.remove('active'));
-
-                // Add active class to selected item
-                playlistItems[index].classList.add('active');
-
-                // Update channel info
-                channelNameEl.textContent = channel.name;
-                channelLogoEl.src = channel.logo || '';
-                channelLogoEl.style.display = channel.logo ? 'block' : 'none';
-
-                // Destroy existing dash player if exists
-                if (dashPlayer) {
-                    dashPlayer.reset();
-                }
-
-                // Check if it's a DASH stream with DRM
-                if (channel.url.includes('.mpd')) {
-                    try {
-                        // Initialize Dash.js player
-                        dashPlayer = dashjs.MediaPlayer().create();
-                        dashPlayer.initialize(videoPlayer, channel.url, true);
-
-                        // Handle DRM configuration if available
-                        const drmProperties = channel.properties;
-                        if (drmProperties['inputstream.adaptive.license_type'] === 'clearkey' && 
-                            drmProperties['inputstream.adaptive.license_key']) {
-                            
-                            const licenseUrl = drmProperties['inputstream.adaptive.license_key'];
-                            
-                            dashPlayer.setProtectionData({
-                                "com.widevine.alpha": {
-                                    serverURL: licenseUrl
-                                },
-                                "com.microsoft.playready": {
-                                    serverURL: licenseUrl
-                                }
-                            });
-                        }
-                    } catch (error) {
-                        showError(`Error setting up DASH player: ${error.message}`);
-                    }
-                } else {
-                    // For non-DASH streams, use standard video element
-                    videoPlayer.src = channel.url;
-                    videoPlayer.play().catch(error => {
-                        showError(`Error playing video: ${error.message}`);
-                    });
-                }
-            }
-        }
-
-        // Error handling
-        videoPlayer.onerror = function(e) {
-            showError(`Video error: ${e.target.error.message}`);
-        };
+        // Initial grid rendering
+        renderPlaylistGrid();
     </script>
 </body>
 </html>
