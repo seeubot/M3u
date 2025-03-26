@@ -58,21 +58,49 @@
         #fileInput {
             display: none;
         }
-        .file-upload {
+        .input-group {
+            display: flex;
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+        .input-group input {
+            flex-grow: 1;
+            padding: 10px;
+            background-color: #0f3460;
+            border: none;
+            color: white;
+            border-radius: 5px;
+        }
+        .button {
             background-color: #0f3460;
             color: white;
             padding: 10px 15px;
             border-radius: 5px;
             cursor: pointer;
             text-align: center;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #e94560;
+        }
+        .file-upload {
             margin-bottom: 15px;
         }
-        .file-upload:hover {
-            background-color: #e94560;
+        #loadingIndicator {
+            display: none;
+            text-align: center;
+            color: #e94560;
+            margin-top: 10px;
         }
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
+            }
+            .input-group {
+                flex-direction: column;
+            }
+            .input-group input, .input-group .button {
+                width: 100%;
             }
         }
     </style>
@@ -83,10 +111,15 @@
             <video id="videoPlayer" controls autoplay></video>
         </div>
         <div class="playlist-section">
-            <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+            <div class="input-group">
+                <input type="text" id="playlistUrl" placeholder="Enter M3U Playlist URL">
+                <div class="button" onclick="loadPlaylistFromUrl()">Load URL</div>
+            </div>
+            <div class="file-upload button" onclick="document.getElementById('fileInput').click()">
                 Upload M3U Playlist
             </div>
             <input type="file" id="fileInput" accept=".m3u" onchange="handleFileUpload(event)">
+            <div id="loadingIndicator">Loading playlist...</div>
             <div id="playlist"></div>
         </div>
     </div>
@@ -96,6 +129,8 @@
         let currentPlaylist = [];
         const videoPlayer = document.getElementById('videoPlayer');
         const playlistContainer = document.getElementById('playlist');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const playlistUrlInput = document.getElementById('playlistUrl');
 
         // Handle file upload
         function handleFileUpload(event) {
@@ -106,6 +141,44 @@
                     parseM3UPlaylist(e.target.result);
                 };
                 reader.readAsText(file);
+            }
+        }
+
+        // Load playlist from URL
+        async function loadPlaylistFromUrl() {
+            const url = playlistUrlInput.value.trim();
+            if (!url) {
+                alert('Please enter a valid URL');
+                return;
+            }
+
+            try {
+                // Show loading indicator
+                loadingIndicator.style.display = 'block';
+                
+                // Fetch the playlist
+                const response = await fetch(url);
+                
+                // Check if the request was successful
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                // Get the text content
+                const content = await response.text();
+                
+                // Parse the playlist
+                parseM3UPlaylist(content);
+                
+                // Hide loading indicator
+                loadingIndicator.style.display = 'none';
+            } catch (error) {
+                // Hide loading indicator
+                loadingIndicator.style.display = 'none';
+                
+                // Show error message
+                alert(`Error loading playlist: ${error.message}`);
+                console.error('Playlist loading error:', error);
             }
         }
 
@@ -121,6 +194,9 @@
 
             lines.forEach(line => {
                 line = line.trim();
+                
+                // Skip comments and empty lines
+                if (!line || line.startsWith('#EXTM3U') || line.startsWith('##')) return;
                 
                 // Check for channel info
                 if (line.startsWith('#EXTINF:')) {
@@ -145,6 +221,12 @@
         // Render playlist items
         function renderPlaylist() {
             playlistContainer.innerHTML = '';
+            
+            if (currentPlaylist.length === 0) {
+                playlistContainer.innerHTML = '<p style="text-align:center;color:#888;">No channels found</p>';
+                return;
+            }
+
             currentPlaylist.forEach((channel, index) => {
                 const channelElement = document.createElement('div');
                 channelElement.classList.add('playlist-item');
