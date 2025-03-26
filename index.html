@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern M3U TV Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #1a1a2e;
+            color: #ffffff;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        .player-section {
+            flex: 2;
+        }
+        .playlist-section {
+            flex: 1;
+            background-color: #16213e;
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #videoPlayer {
+            width: 100%;
+            background-color: #000;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .playlist-item {
+            background-color: #0f3460;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .playlist-item:hover {
+            background-color: #e94560;
+        }
+        .playlist-item.active {
+            background-color: #e94560;
+            font-weight: bold;
+        }
+        #fileInput {
+            display: none;
+        }
+        .file-upload {
+            background-color: #0f3460;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .file-upload:hover {
+            background-color: #e94560;
+        }
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="player-section">
+            <video id="videoPlayer" controls autoplay></video>
+        </div>
+        <div class="playlist-section">
+            <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                Upload M3U Playlist
+            </div>
+            <input type="file" id="fileInput" accept=".m3u" onchange="handleFileUpload(event)">
+            <div id="playlist"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentPlaylist = [];
+        const videoPlayer = document.getElementById('videoPlayer');
+        const playlistContainer = document.getElementById('playlist');
+
+        // Handle file upload
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    parseM3UPlaylist(e.target.result);
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // Parse M3U playlist
+        function parseM3UPlaylist(content) {
+            // Reset previous playlist
+            currentPlaylist = [];
+            playlistContainer.innerHTML = '';
+
+            // Split the content into lines
+            const lines = content.split('\n');
+            let currentChannel = null;
+
+            lines.forEach(line => {
+                line = line.trim();
+                
+                // Check for channel info
+                if (line.startsWith('#EXTINF:')) {
+                    // Extract channel name
+                    const match = line.match(/-1,(.+)$/);
+                    currentChannel = match ? match[1].trim() : 'Unknown Channel';
+                } 
+                // Check for stream URL
+                else if (line.startsWith('http') && currentChannel) {
+                    currentPlaylist.push({
+                        name: currentChannel,
+                        url: line
+                    });
+                    currentChannel = null;
+                }
+            });
+
+            // Render playlist
+            renderPlaylist();
+        }
+
+        // Render playlist items
+        function renderPlaylist() {
+            playlistContainer.innerHTML = '';
+            currentPlaylist.forEach((channel, index) => {
+                const channelElement = document.createElement('div');
+                channelElement.classList.add('playlist-item');
+                channelElement.textContent = channel.name;
+                channelElement.onclick = () => playChannel(index);
+                playlistContainer.appendChild(channelElement);
+            });
+
+            // Play first channel if available
+            if (currentPlaylist.length > 0) {
+                playChannel(0);
+            }
+        }
+
+        // Play selected channel
+        function playChannel(index) {
+            if (index >= 0 && index < currentPlaylist.length) {
+                // Remove active class from all items
+                const playlistItems = document.querySelectorAll('.playlist-item');
+                playlistItems.forEach(item => item.classList.remove('active'));
+
+                // Add active class to selected item
+                playlistItems[index].classList.add('active');
+
+                // Set video source and play
+                videoPlayer.src = currentPlaylist[index].url;
+                videoPlayer.play();
+            }
+        }
+
+        // Error handling for video
+        videoPlayer.onerror = function() {
+            alert('Error loading the stream. Please check the URL or your internet connection.');
+        };
+    </script>
+</body>
+</html>
