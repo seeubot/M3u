@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JW Player with M3U URL Loader</title>
+    <title>Advanced Video Playback Troubleshooter</title>
     <script src="https://content.jwplatform.com/libraries/SAHhwvZq.js"></script>
     <style>
         body {
@@ -28,39 +28,28 @@
             aspect-ratio: 16 / 9;
             background-color: #000;
         }
-        #m3u-url-input {
+        #stream-input {
             width: 100%;
             padding: 10px;
             margin-bottom: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
         }
-        #playlist-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 10px;
-        }
-        .playlist-item {
-            cursor: pointer;
-            border: 1px solid #ddd;
+        #error-details {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 15px;
+            margin-top: 15px;
             border-radius: 4px;
-            padding: 10px;
-            text-align: center;
-            background-color: white;
-            transition: background-color 0.3s ease;
+            display: none;
         }
-        .playlist-item:hover {
-            background-color: #f0f0f0;
-        }
-        .playlist-item img {
-            max-width: 100%;
-            height: auto;
+        .input-group {
             margin-bottom: 10px;
         }
-        #loading-indicator {
-            text-align: center;
-            padding: 20px;
-            display: none;
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
         }
     </style>
 </head>
@@ -68,12 +57,28 @@
     <div class="container">
         <div id="player-section">
             <div id="jwplayerDiv"></div>
-            <input type="text" id="m3u-url-input" placeholder="Enter M3U Playlist URL">
-            <button onclick="loadM3UFromURL()">Load Playlist</button>
-            <div id="loading-indicator">Loading playlist...</div>
-        </div>
-        <div id="playlist-section">
-            <div id="playlist-grid"></div>
+            
+            <div class="input-group">
+                <label for="stream-url">Stream URL:</label>
+                <input type="text" id="stream-url" class="stream-input" placeholder="Enter stream URL">
+            </div>
+            
+            <div class="input-group">
+                <label for="license-key">License Key (optional):</label>
+                <input type="text" id="license-key" class="stream-input" placeholder="Enter DRM license key">
+            </div>
+            
+            <div class="input-group">
+                <label for="key-id">Key ID (optional):</label>
+                <input type="text" id="key-id" class="stream-input" placeholder="Enter Key ID">
+            </div>
+            
+            <button onclick="setupStream()">Load Stream</button>
+            
+            <div id="error-details">
+                <h3>Error Details</h3>
+                <pre id="error-message"></pre>
+            </div>
         </div>
     </div>
 
@@ -84,120 +89,84 @@
             aspectratio: '16:9'
         });
 
-        // Parse M3U playlist from text content
-        function parseM3UPlaylist(m3uContent) {
-            const lines = m3uContent.split('\n');
-            const playlist = [];
+        // Advanced error handling
+        player.on('error', function(error) {
+            console.error('Player Error:', error);
+            const errorDetailsDiv = document.getElementById('error-details');
+            const errorMessagePre = document.getElementById('error-message');
+            
+            errorMessagePre.textContent = JSON.stringify(error, null, 2);
+            errorDetailsDiv.style.display = 'block';
+        });
 
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                
-                // Skip empty lines and comments
-                if (!line || line.startsWith('#EXTM3U') || line === '') continue;
+        function setupStream() {
+            // Reset error details
+            const errorDetailsDiv = document.getElementById('error-details');
+            errorDetailsDiv.style.display = 'none';
 
-                // Check for extended info
-                if (line.startsWith('#EXTINF:')) {
-                    const extinfoMatch = line.match(/#EXTINF:-1.*tvg-logo="([^"]*)".*group-title="([^"]*)"(.+)/);
-                    const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
-                    
-                    if (extinfoMatch && nextLine) {
-                        const title = extinfoMatch[3].trim();
-                        const logo = extinfoMatch[1];
-                        const groupTitle = extinfoMatch[2];
+            // Get input values
+            const streamUrl = document.getElementById('stream-url').value.trim();
+            const licenseKey = document.getElementById('license-key').value.trim();
+            const keyId = document.getElementById('key-id').value.trim();
 
-                        // Extract Kodi properties
-                        const kodiProps = {};
-                        const propLines = lines.slice(0, i).filter(l => l.startsWith('KODIPROP:'));
-                        propLines.forEach(propLine => {
-                            const [key, value] = propLine.replace('KODIPROP:', '').split('=');
-                            kodiProps[key.trim()] = value.trim();
-                        });
-
-                        // Prepare playlist item
-                        const playlistItem = {
-                            title: title,
-                            file: nextLine,
-                            type: "dash",
-                            image: logo || '/api/placeholder/150/100'
-                        };
-
-                        // Add DRM if license key is present
-                        if (kodiProps['inputstream.adaptive.license_key']) {
-                            const [keyId, key] = kodiProps['inputstream.adaptive.license_key'].split(':');
-                            playlistItem.drm = {
-                                "clearkey": {
-                                    "keyId": keyId,
-                                    "key": key
-                                }
-                            };
-                        }
-
-                        playlist.push(playlistItem);
-                    }
-                }
-            }
-
-            return playlist;
-        }
-
-        // Render playlist grid
-        function renderPlaylistGrid(playlist) {
-            const gridContainer = document.getElementById('playlist-grid');
-            gridContainer.innerHTML = '';
-
-            playlist.forEach((item, index) => {
-                const playlistItem = document.createElement('div');
-                playlistItem.className = 'playlist-item';
-                playlistItem.innerHTML = `
-                    <img src="${item.image}" alt="${item.title}">
-                    <div>${item.title}</div>
-                `;
-                playlistItem.onclick = () => {
-                    player.load([item]);
-                };
-                gridContainer.appendChild(playlistItem);
-            });
-        }
-
-        // Load M3U Playlist from URL
-        async function loadM3UFromURL() {
-            const m3uUrlInput = document.getElementById('m3u-url-input');
-            const loadingIndicator = document.getElementById('loading-indicator');
-            const playlistURL = m3uUrlInput.value.trim();
-
-            if (!playlistURL) {
-                alert('Please enter a valid M3U playlist URL');
+            // Validate stream URL
+            if (!streamUrl) {
+                alert('Please enter a stream URL');
                 return;
             }
 
+            // Prepare stream configuration
+            const streamConfig = {
+                file: streamUrl,
+                type: 'dash'
+            };
+
+            // Add DRM configuration if keys are provided
+            if (licenseKey && keyId) {
+                streamConfig.drm = {
+                    "clearkey": {
+                        "keyId": keyId,
+                        "key": licenseKey
+                    }
+                };
+            }
+
+            // Load the stream
             try {
-                // Show loading indicator
-                loadingIndicator.style.display = 'block';
-
-                // Fetch M3U playlist
-                const response = await fetch(playlistURL);
-                const m3uContent = await response.text();
-
-                // Parse M3U and update playlist
-                const playlist = parseM3UPlaylist(m3uContent);
-
-                if (playlist.length === 0) {
-                    throw new Error('No valid playlist items found');
-                }
-
-                // Update player and grid
-                renderPlaylistGrid(playlist);
-                
-                // Load first item by default
-                player.load([playlist[0]]);
+                player.load([streamConfig]);
+                player.play();
             } catch (error) {
-                console.error('Error loading M3U playlist:', error);
-                alert('Failed to load playlist. Please check the URL and try again.');
-            } finally {
-                // Hide loading indicator
-                loadingIndicator.style.display = 'none';
+                console.error('Stream setup error:', error);
+                const errorDetailsDiv = document.getElementById('error-details');
+                const errorMessagePre = document.getElementById('error-message');
+                
+                errorMessagePre.textContent = JSON.stringify(error, null, 2);
+                errorDetailsDiv.style.display = 'block';
             }
         }
+
+        // Preset the stream details if known
+        document.getElementById('stream-url').value = 'https://livestream.sunnxt.com/585bb66e95c84ccea3f828c96b3567b5/SunMusicB_IN_index.mpd';
+        document.getElementById('key-id').value = '21ddc14c4da94c079d4f4c343ecdcd80';
+        document.getElementById('license-key').value = '5701bee4ee9b625d0c8ed7de032a7478';
+    </script>
+
+    <script>
+        // Additional debugging information
+        console.log('JW Player Version:', jwplayer.version);
+        console.log('User Agent:', navigator.userAgent);
+        
+        // Check browser capabilities
+        function checkBrowserCapabilities() {
+            const capabilities = {
+                mediaSource: !!window.MediaSource,
+                encryptedMedia: !!navigator.requestMediaKeySystemAccess,
+                dash: 'MPD' in document.createElement('source')
+            };
+            console.log('Browser Capabilities:', capabilities);
+            return capabilities;
+        }
+        checkBrowserCapabilities();
     </script>
 </body>
 </html>
