@@ -55,23 +55,11 @@
         }
         .controls {
             display: flex;
-            flex-direction: column;
-            gap: 10px;
+            justify-content: center;
             margin-bottom: 20px;
         }
-        .control-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        input, select {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            flex-grow: 1;
-        }
         button {
-            padding: 10px 20px;
+            padding: 12px 30px;
             background-color: #1a73e8;
             color: white;
             border: none;
@@ -79,6 +67,7 @@
             cursor: pointer;
             transition: background-color 0.3s;
             font-weight: 500;
+            font-size: 16px;
         }
         button:hover {
             background-color: #0d5bbd;
@@ -92,6 +81,7 @@
             border-radius: 4px;
             margin-top: 10px;
             font-size: 14px;
+            text-align: center;
         }
         .success {
             background-color: #e6f4ea;
@@ -167,20 +157,9 @@
         </header>
         
         <div class="controls">
-            <div class="control-row">
-                <input type="text" id="repoUrl" placeholder="Repository URL" value="https://repo.example.com">
-                <select id="qualitySelector">
-                    <option value="1080p">1080p</option>
-                    <option value="720p" selected>720p</option>
-                    <option value="480p">480p</option>
-                </select>
-            </div>
-            <div class="control-row">
-                <input type="text" id="fileName" placeholder="File name" value="clipsai.mp4">
-                <button id="loadBtn">Load Secure Video</button>
-            </div>
-            <div id="status" class="status hidden"></div>
+            <button id="loadBtn">Load Secure Video</button>
         </div>
+        <div id="status" class="status hidden"></div>
         
         <div class="video-container">
             <div id="overlay" class="overlay">
@@ -203,9 +182,6 @@
     <script>
         // DOM Elements
         const videoPlayer = document.getElementById('videoPlayer');
-        const repoUrl = document.getElementById('repoUrl');
-        const fileName = document.getElementById('fileName');
-        const qualitySelector = document.getElementById('qualitySelector');
         const loadBtn = document.getElementById('loadBtn');
         const status = document.getElementById('status');
         const overlay = document.getElementById('overlay');
@@ -216,6 +192,9 @@
         
         // Configuration
         const config = {
+            repositoryUrl: 'https://repo.example.com',
+            videoFilename: 'clipsai.mp4',
+            videoQuality: '720p',
             chunkSize: 2 * 1024 * 1024, // 2MB chunks
             maxRetries: 3,
             retryDelay: 1000,
@@ -308,12 +287,8 @@
                 const mimeType = config.videoContentType;
                 const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
                 
-                // Get the base repository URL and filename
-                const baseUrl = repoUrl.value.trim();
-                const videoFilename = fileName.value.trim();
-                
                 // Fetch and process video from repository
-                await fetchAndProcessVideo(sourceBuffer, baseUrl, videoFilename);
+                await fetchAndProcessVideo(sourceBuffer);
                 
                 // Finalize the media source
                 mediaSource.endOfStream();
@@ -340,13 +315,13 @@
         }
         
         // Fetch and process video function
-        async function fetchAndProcessVideo(sourceBuffer, baseUrl, videoFilename) {
+        async function fetchAndProcessVideo(sourceBuffer) {
             try {
                 loadingText.textContent = 'Initializing repository connection...';
                 loadProgress.value = 30;
                 
                 // First, authenticate with the repository
-                const authResponse = await fetch(`${baseUrl}/api/auth`, {
+                const authResponse = await fetch(`${config.repositoryUrl}/api/auth`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -354,7 +329,7 @@
                     body: JSON.stringify({
                         sessionId: config.sessionId,
                         deviceId: config.deviceId,
-                        quality: qualitySelector.value
+                        quality: config.videoQuality
                     })
                 });
                 
@@ -369,11 +344,11 @@
                 loadingText.textContent = 'Requesting video from repository...';
                 
                 // Request video from repository using the access token
-                const videoResponse = await fetch(`${baseUrl}/api/content/videos/${videoFilename}`, {
+                const videoResponse = await fetch(`${config.repositoryUrl}/api/content/videos/${config.videoFilename}`, {
                     headers: {
                         'Authorization': `Bearer ${accessToken}`,
                         'X-Request-ID': generateRequestId(),
-                        'X-Client-Quality': qualitySelector.value
+                        'X-Client-Quality': config.videoQuality
                     }
                 });
                 
@@ -495,9 +470,6 @@
             
             // Apply security measures
             setupSecurityMeasures();
-            
-            // Make the filename field editable
-            fileName.removeAttribute('readonly');
             
             // Initial status message
             showStatus('Ready to load video securely', 'info');
