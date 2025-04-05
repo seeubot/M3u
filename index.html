@@ -176,7 +176,7 @@
                 </select>
             </div>
             <div class="control-row">
-                <input type="text" id="fileName" placeholder="File name" value="clipsai.mp4" readonly>
+                <input type="text" id="fileName" placeholder="File name" value="clipsai.mp4">
                 <button id="loadBtn">Load Secure Video</button>
             </div>
             <div id="status" class="status hidden"></div>
@@ -265,6 +265,21 @@
             watermark.textContent = `ID:${sessionHash} • ${timestamp}`;
         }
         
+        // Construct direct video URL 
+        function constructVideoUrl(baseUrl, filename) {
+            // Ensure baseUrl ends with a slash
+            if (!baseUrl.endsWith('/')) {
+                baseUrl += '/';
+            }
+            
+            // Simply join the base URL and filename
+            const url = baseUrl + filename;
+            
+            // Add cache-busting parameter
+            const cacheBuster = `?_t=${Date.now()}`;
+            return url + cacheBuster;
+        }
+        
         // Load and play the video securely
         async function loadSecureVideo() {
             try {
@@ -308,21 +323,12 @@
                 const mimeType = config.videoContentType;
                 const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
                 
-                // In a real implementation, we would fetch the actual video
-                // For this demonstration, we'll use a simulated approach
-                // that shows the concept without actual implementation details
-                
-                // Get the base repository URL and construct the full path
-                // but obfuscate it to prevent easy sniffing
+                // Get the base repository URL and filename
                 const baseUrl = repoUrl.value.trim();
-                const quality = qualitySelector.value;
-                const videoId = fileName.value.trim().replace('.mp4', '');
+                const videoFilename = fileName.value.trim();
                 
-                // Instead of constructing a simple URL, we'll use a more complex approach
-                // to fetch the video that would be harder to analyze in packet captures
-                
-                // Simulate video loading in chunks
-                await fetchAndProcessVideo(sourceBuffer, baseUrl, videoId, quality);
+                // Fetch and process video from repository
+                await fetchAndProcessVideo(sourceBuffer, baseUrl, videoFilename);
                 
                 // Finalize the media source
                 mediaSource.endOfStream();
@@ -348,30 +354,22 @@
             }
         }
         
-        // Simulated video fetch and processing function
-        async function fetchAndProcessVideo(sourceBuffer, baseUrl, videoId, quality) {
-            // In a real implementation, this would:
-            // 1. Make API calls to get authorized segment URLs
-            // 2. Fetch encrypted segments
-            // 3. Decrypt segments using a license key
-            // 4. Feed segments to the media source
-            
-            // For demonstration, we'll use a sample video to show the concept
-            
-            // Sample video URL (for demonstration purposes only)
-            // In a real implementation, this would be your actual video source
-            const sampleVideoUrl = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-            
+        // Fetch and process video function
+        async function fetchAndProcessVideo(sourceBuffer, baseUrl, videoFilename) {
             try {
-                loadingText.textContent = 'Fetching video segments...';
+                loadingText.textContent = 'Fetching video...';
                 loadProgress.value = 30;
                 
                 // Simulate API call to get access tokens
                 await new Promise(resolve => setTimeout(resolve, 800));
                 loadProgress.value = 40;
                 
+                // Construct the direct video URL from the repository
+                const videoUrl = constructVideoUrl(baseUrl, videoFilename);
+                console.log('Fetching video from:', videoUrl);
+                
                 // Fetch the video file
-                const response = await fetch(sampleVideoUrl);
+                const response = await fetch(videoUrl);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch video: ${response.status}`);
@@ -390,9 +388,6 @@
                     const { done, value } = await reader.read();
                     
                     if (done) break;
-                    
-                    // In a real implementation, we would decrypt the chunk here
-                    // For now, we just use it as-is for demonstration
                     
                     // Wait if the source buffer is updating
                     if (sourceBuffer.updating) {
@@ -495,8 +490,11 @@
             // Apply security measures
             setupSecurityMeasures();
             
+            // Make the filename field editable
+            fileName.removeAttribute('readonly');
+            
             // Initial status message
-            showStatus('Ready to load clipsai.mp4 securely', 'info');
+            showStatus('Ready to load video securely', 'info');
         }
         
         // Initialize the player
