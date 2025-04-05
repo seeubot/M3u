@@ -168,7 +168,7 @@
         
         <div class="controls">
             <div class="control-row">
-                <input type="text" id="repoUrl" placeholder="Repository URL" value="https://repo.example.com/videos/">
+                <input type="text" id="repoUrl" placeholder="Repository URL" value="https://repo.example.com">
                 <select id="qualitySelector">
                     <option value="1080p">1080p</option>
                     <option value="720p" selected>720p</option>
@@ -265,21 +265,6 @@
             watermark.textContent = `ID:${sessionHash} • ${timestamp}`;
         }
         
-        // Construct direct video URL 
-        function constructVideoUrl(baseUrl, filename) {
-            // Ensure baseUrl ends with a slash
-            if (!baseUrl.endsWith('/')) {
-                baseUrl += '/';
-            }
-            
-            // Simply join the base URL and filename
-            const url = baseUrl + filename;
-            
-            // Add cache-busting parameter
-            const cacheBuster = `?_t=${Date.now()}`;
-            return url + cacheBuster;
-        }
-        
         // Load and play the video securely
         async function loadSecureVideo() {
             try {
@@ -357,30 +342,51 @@
         // Fetch and process video function
         async function fetchAndProcessVideo(sourceBuffer, baseUrl, videoFilename) {
             try {
-                loadingText.textContent = 'Fetching video...';
+                loadingText.textContent = 'Initializing repository connection...';
                 loadProgress.value = 30;
                 
-                // Simulate API call to get access tokens
-                await new Promise(resolve => setTimeout(resolve, 800));
+                // First, authenticate with the repository
+                const authResponse = await fetch(`${baseUrl}/api/auth`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sessionId: config.sessionId,
+                        deviceId: config.deviceId,
+                        quality: qualitySelector.value
+                    })
+                });
+                
+                if (!authResponse.ok) {
+                    throw new Error(`Repository authentication failed: ${authResponse.status}`);
+                }
+                
+                const authData = await authResponse.json();
+                const { accessToken } = authData;
+                
                 loadProgress.value = 40;
+                loadingText.textContent = 'Requesting video from repository...';
                 
-                // Construct the direct video URL from the repository
-                const videoUrl = constructVideoUrl(baseUrl, videoFilename);
-                console.log('Fetching video from:', videoUrl);
+                // Request video from repository using the access token
+                const videoResponse = await fetch(`${baseUrl}/api/content/videos/${videoFilename}`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'X-Request-ID': generateRequestId(),
+                        'X-Client-Quality': qualitySelector.value
+                    }
+                });
                 
-                // Fetch the video file
-                const response = await fetch(videoUrl);
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch video: ${response.status}`);
+                if (!videoResponse.ok) {
+                    throw new Error(`Failed to fetch video from repository: ${videoResponse.status}`);
                 }
                 
                 // Get content length if available
-                const contentLength = response.headers.get('Content-Length');
+                const contentLength = videoResponse.headers.get('Content-Length');
                 const totalSize = contentLength ? parseInt(contentLength) : 0;
                 
                 // Read the video as a stream
-                const reader = response.body.getReader();
+                const reader = videoResponse.body.getReader();
                 let receivedLength = 0;
                 
                 // Process stream chunks
@@ -411,7 +417,7 @@
                         : Math.min(40 + (receivedLength / 1000000), 99);
                     
                     loadProgress.value = progressValue;
-                    loadingText.textContent = `Loading video: ${Math.round(progressValue)}%`;
+                    loadingText.textContent = `Loading video from repository: ${Math.round(progressValue)}%`;
                     
                     // Small delay to avoid UI freezing
                     await new Promise(resolve => setTimeout(resolve, 50));
@@ -419,11 +425,11 @@
                 
                 // Finalize loading
                 loadProgress.value = 100;
-                loadingText.textContent = 'Video loaded successfully';
+                loadingText.textContent = 'Video successfully loaded from repository';
                 
             } catch (error) {
-                console.error('Error in fetch process:', error);
-                throw new Error('Failed to process video segments');
+                console.error('Repository fetch error:', error);
+                throw new Error(`Failed to fetch video from repository: ${error.message}`);
             }
         }
         
