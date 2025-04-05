@@ -3,170 +3,344 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Video Playback Troubleshooter</title>
-    <script src="https://content.jwplatform.com/libraries/SAHhwvZq.js"></script>
+    <title>Secure Video Player</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
             background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            color: #333;
         }
         .container {
-            display: flex;
-            gap: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        #player-section {
-            flex: 2;
+        h1 {
+            text-align: center;
+            color: #2c3e50;
         }
-        #playlist-section {
-            flex: 1;
-        }
-        #jwplayerDiv {
+        .video-container {
+            position: relative;
             width: 100%;
-            aspect-ratio: 16 / 9;
-            background-color: #000;
+            background: #000;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
         }
-        #stream-input {
+        #videoPlayer {
             width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        #error-details {
-            background-color: #fff3cd;
-            border: 1px solid #ffeeba;
-            color: #856404;
-            padding: 15px;
-            margin-top: 15px;
-            border-radius: 4px;
-            display: none;
-        }
-        .input-group {
-            margin-bottom: 10px;
-        }
-        .input-group label {
             display: block;
-            margin-bottom: 5px;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        progress {
+            width: 100%;
+            height: 10px;
+            margin-top: 10px;
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div id="player-section">
-            <div id="jwplayerDiv"></div>
-            
-            <div class="input-group">
-                <label for="stream-url">Stream URL:</label>
-                <input type="text" id="stream-url" class="stream-input" placeholder="Enter stream URL">
+        <h1>Secure Video Player</h1>
+        
+        <div class="controls">
+            <button id="loadBtn">Load Secure Content</button>
+            <div id="status" class="status hidden"></div>
+            <div id="loadingIndicator" class="loading hidden">
+                <div>Loading secure content...</div>
+                <progress id="loadProgress" value="0" max="100"></progress>
             </div>
-            
-            <div class="input-group">
-                <label for="license-key">License Key (optional):</label>
-                <input type="text" id="license-key" class="stream-input" placeholder="Enter DRM license key">
-            </div>
-            
-            <div class="input-group">
-                <label for="key-id">Key ID (optional):</label>
-                <input type="text" id="key-id" class="stream-input" placeholder="Enter Key ID">
-            </div>
-            
-            <button onclick="setupStream()">Load Stream</button>
-            
-            <div id="error-details">
-                <h3>Error Details</h3>
-                <pre id="error-message"></pre>
-            </div>
+        </div>
+        
+        <div class="video-container">
+            <video id="videoPlayer" controls></video>
         </div>
     </div>
 
     <script>
-        // Initialize JW Player
-        const player = jwplayer("jwplayerDiv").setup({
-            width: '100%',
-            aspectratio: '16:9'
-        });
-
-        // Advanced error handling
-        player.on('error', function(error) {
-            console.error('Player Error:', error);
-            const errorDetailsDiv = document.getElementById('error-details');
-            const errorMessagePre = document.getElementById('error-message');
-            
-            errorMessagePre.textContent = JSON.stringify(error, null, 2);
-            errorDetailsDiv.style.display = 'block';
-        });
-
-        function setupStream() {
-            // Reset error details
-            const errorDetailsDiv = document.getElementById('error-details');
-            errorDetailsDiv.style.display = 'none';
-
-            // Get input values
-            const streamUrl = document.getElementById('stream-url').value.trim();
-            const licenseKey = document.getElementById('license-key').value.trim();
-            const keyId = document.getElementById('key-id').value.trim();
-
-            // Validate stream URL
-            if (!streamUrl) {
-                alert('Please enter a stream URL');
-                return;
-            }
-
-            // Prepare stream configuration
-            const streamConfig = {
-                file: streamUrl,
-                type: 'dash'
-            };
-
-            // Add DRM configuration if keys are provided
-            if (licenseKey && keyId) {
-                streamConfig.drm = {
-                    "clearkey": {
-                        "keyId": keyId,
-                        "key": licenseKey
-                    }
-                };
-            }
-
-            // Load the stream
-            try {
-                player.load([streamConfig]);
-                player.play();
-            } catch (error) {
-                console.error('Stream setup error:', error);
-                const errorDetailsDiv = document.getElementById('error-details');
-                const errorMessagePre = document.getElementById('error-message');
-                
-                errorMessagePre.textContent = JSON.stringify(error, null, 2);
-                errorDetailsDiv.style.display = 'block';
-            }
-        }
-
-        // Preset the stream details if known
-        document.getElementById('stream-url').value = 'https://livestream.sunnxt.com/585bb66e95c84ccea3f828c96b3567b5/SunMusicB_IN_index.mpd';
-        document.getElementById('key-id').value = '21ddc14c4da94c079d4f4c343ecdcd80';
-        document.getElementById('license-key').value = '5701bee4ee9b625d0c8ed7de032a7478';
-    </script>
-
-    <script>
-        // Additional debugging information
-        console.log('JW Player Version:', jwplayer.version);
-        console.log('User Agent:', navigator.userAgent);
+        // DOM Elements
+        const videoPlayer = document.getElementById('videoPlayer');
+        const loadBtn = document.getElementById('loadBtn');
+        const status = document.getElementById('status');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const loadProgress = document.getElementById('loadProgress');
         
-        // Check browser capabilities
-        function checkBrowserCapabilities() {
-            const capabilities = {
-                mediaSource: !!window.MediaSource,
-                encryptedMedia: !!navigator.requestMediaKeySystemAccess,
-                dash: 'MPD' in document.createElement('source')
-            };
-            console.log('Browser Capabilities:', capabilities);
-            return capabilities;
+        // Configuration (in a real app, this would be dynamic or server-provided)
+        const config = {
+            // API endpoints would be randomized and rotated in production
+            apiEndpoint: 'https://api.example.com/media',
+            authToken: generateSessionToken(),
+            chunkSize: 2 * 1024 * 1024, // 2MB chunks
+            videoContentType: 'video/mp4'
+        };
+        
+        // Generate a random session token
+        function generateSessionToken() {
+            return [...Array(32)].map(() => Math.floor(Math.random() * 36).toString(36)).join('');
         }
-        checkBrowserCapabilities();
+        
+        // Generate a temporary filename to use in requests
+        function generateTemporaryName() {
+            const timestamp = Date.now().toString(36);
+            const random = Math.random().toString(36).substring(2, 10);
+            return `temp_${timestamp}_${random}`;
+        }
+        
+        // Update status with appropriate styling
+        function showStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.classList.remove('hidden');
+        }
+        
+        // Hide status message
+        function hideStatus() {
+            status.classList.add('hidden');
+        }
+        
+        // Anti-packet capture implementation
+        async function loadSecureContent() {
+            try {
+                // Show loading indicator
+                loadingIndicator.classList.remove('hidden');
+                loadBtn.disabled = true;
+                
+                // 1. Initialize Media Source Extensions
+                const mediaSource = new MediaSource();
+                const videoUrl = URL.createObjectURL(mediaSource);
+                videoPlayer.src = videoUrl;
+                
+                // 2. Wait for MSE to open
+                await new Promise(resolve => {
+                    mediaSource.addEventListener('sourceopen', resolve, { once: true });
+                });
+                
+                // 3. Create a source buffer
+                const sourceBuffer = mediaSource.addSourceBuffer(config.videoContentType);
+                
+                // 4. Obtain the content key through a secure channel
+                // In a real implementation, this would involve DRM license acquisition
+                const contentKey = await simulateSecureKeyExchange();
+                
+                // 5. In a real implementation, we would:
+                // - Make secure API calls to fetch encrypted chunks
+                // - Use randomized URLs for each request
+                // - Apply rotating request signatures
+                // - Decrypt chunks using the content key
+                // - Append to the source buffer
+                
+                // For demo purposes, we'll simulate the process
+                await simulateSecureLoading(sourceBuffer);
+                
+                // 6. Close the media source when all chunks are loaded
+                mediaSource.endOfStream();
+                
+                // Show success message
+                showStatus('Content loaded securely', 'success');
+                
+                // Start playback
+                videoPlayer.play();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus(`Failed to load content: ${error.message}`, 'error');
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                loadBtn.disabled = false;
+            }
+        }
+        
+        // Simulate secure key exchange (in reality this would use HTTPS and cryptography)
+        async function simulateSecureKeyExchange() {
+            // Generate unique request parameters
+            const requestId = generateTemporaryName();
+            const timestamp = Date.now();
+            
+            // In production:
+            // - Would use encrypted communication
+            // - Would authenticate with rotating tokens
+            // - Would verify server certificates
+            
+            // Simulate network delay
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
+            // Return a simulated content key
+            return {
+                id: requestId,
+                timestamp: timestamp,
+                key: 'simulated-content-key',
+                expires: Date.now() + 3600000 // 1 hour expiry
+            };
+        }
+        
+        // Simulate secure content loading with anti-packet capture techniques
+        async function simulateSecureLoading(sourceBuffer) {
+            // In a real implementation:
+            // 1. URLs would be dynamic and temporary
+            // 2. Headers would include rotating signatures
+            // 3. Content would be transmitted in encrypted chunks
+            // 4. Chunks would be decrypted in memory before appending
+            
+            // For demo, use a sample video
+            const sampleVideoUrl = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+            
+            // Simulate fetching video in chunks
+            const response = await fetch(sampleVideoUrl);
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch video content');
+            }
+            
+            const contentLength = response.headers.get('Content-Length');
+            const reader = response.body.getReader();
+            let receivedLength = 0;
+            
+            // Read chunks and process them
+            const chunks = [];
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) break;
+                
+                chunks.push(value);
+                receivedLength += value.length;
+                
+                // Update progress
+                const progress = contentLength ? 
+                    Math.round((receivedLength / contentLength) * 100) : 
+                    Math.min(receivedLength / 1000000 * 10, 99); // Fallback if no content length
+                
+                loadProgress.value = progress;
+                
+                // Wait for buffer to be updated before adding more
+                if (sourceBuffer.updating) {
+                    await new Promise(resolve => {
+                        sourceBuffer.addEventListener('updateend', resolve, { once: true });
+                    });
+                }
+                
+                // In a real implementation, we would decrypt the chunk here
+                const decryptedChunk = value; // Simulate decryption
+                
+                // Append the "decrypted" chunk to the source buffer
+                sourceBuffer.appendBuffer(decryptedChunk);
+                
+                // Wait for the append to complete
+                await new Promise(resolve => {
+                    sourceBuffer.addEventListener('updateend', resolve, { once: true });
+                });
+                
+                // Simulate some processing delay to avoid freezing the UI
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        
+        // Anti-debugging techniques
+        function setupAntiDebugging() {
+            // Detect devtools opening
+            let devtoolsOpen = false;
+            
+            // Regular check for console clearing
+            setInterval(() => {
+                const regexp = /./;
+                regexp.toString = function() {
+                    devtoolsOpen = true;
+                    return 'devtools-detector';
+                };
+                console.log('%c', regexp);
+                
+                // Clear console to make packet analysis harder
+                if (devtoolsOpen) {
+                    console.clear();
+                    devtoolsOpen = false;
+                }
+            }, 1000);
+            
+            // Prevent right-click
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            
+            // Detect network monitoring
+            const originalXHR = window.XMLHttpRequest;
+            window.XMLHttpRequest = function() {
+                const xhr = new originalXHR();
+                
+                // Add random query parameters to all requests
+                const originalOpen = xhr.open;
+                xhr.open = function(method, url, ...args) {
+                    // Add a random parameter to the URL to confuse packet analyzers
+                    const separator = url.includes('?') ? '&' : '?';
+                    const randomParam = `_=${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+                    const modifiedUrl = `${url}${separator}${randomParam}`;
+                    
+                    return originalOpen.call(this, method, modifiedUrl, ...args);
+                };
+                
+                return xhr;
+            };
+        }
+        
+        // Set up event listeners
+        function initialize() {
+            loadBtn.addEventListener('click', loadSecureContent);
+            
+            // Apply anti-debugging measures
+            setupAntiDebugging();
+            
+            // Initial status
+            showStatus('Click "Load Secure Content" to begin', 'info');
+        }
+        
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', initialize);
     </script>
 </body>
 </html>
