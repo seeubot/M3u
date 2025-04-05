@@ -3,480 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ClipsAI Player</title>
+    <title>Local Video Player</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f0f2f5;
-            margin: 0;
-            padding: 0;
-            color: #333;
-        }
-        .container {
-            max-width: 900px;
-            margin: 20px auto;
-            background: white;
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
             padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            background-color: #f5f5f5;
         }
-        header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
+        
+        h1 {
+            color: #333;
+            text-align: center;
         }
-        header h1 {
-            color: #1a73e8;
-            margin: 0;
-        }
-        header .logo {
-            width: 40px;
-            height: 40px;
-            background-color: #1a73e8;
-            border-radius: 50%;
-            margin-right: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
+        
         .video-container {
-            position: relative;
-            width: 100%;
-            background: #000;
+            background-color: #fff;
             border-radius: 8px;
-            overflow: hidden;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
+        
         #videoPlayer {
             width: 100%;
-            display: block;
+            border-radius: 4px;
+            margin-top: 20px;
         }
+        
         .controls {
             display: flex;
             justify-content: center;
-            margin-bottom: 20px;
+            gap: 10px;
+            margin-top: 10px;
         }
+        
         button {
-            padding: 12px 30px;
-            background-color: #1a73e8;
+            background-color: #4285f4;
             color: white;
             border: none;
+            padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
             transition: background-color 0.3s;
-            font-weight: 500;
-            font-size: 16px;
         }
+        
         button:hover {
-            background-color: #0d5bbd;
+            background-color: #3367d6;
         }
-        button:disabled {
-            background-color: #a9a9a9;
-            cursor: not-allowed;
-        }
+        
         .status {
-            padding: 12px;
-            border-radius: 4px;
-            margin-top: 10px;
-            font-size: 14px;
             text-align: center;
-        }
-        .success {
-            background-color: #e6f4ea;
-            color: #137333;
-        }
-        .error {
-            background-color: #fce8e6;
-            color: #c5221f;
-        }
-        .info {
-            background-color: #e8f0fe;
-            color: #1967d2;
-        }
-        .loading-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-        }
-        .loading-indicator {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #1a73e8;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 10px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .progress-container {
-            width: 100%;
+            color: #666;
+            font-style: italic;
             margin-top: 10px;
-        }
-        progress {
-            width: 100%;
-            height: 6px;
-            border-radius: 3px;
-        }
-        .hidden {
-            display: none;
-        }
-        .watermark {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            color: rgba(255, 255, 255, 0.5);
-            font-size: 14px;
-            pointer-events: none;
-        }
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="logo">C</div>
-            <h1>ClipsAI Player</h1>
-        </header>
+    <h1>Local Video Player</h1>
+    
+    <div class="video-container">
+        <video id="videoPlayer" controls></video>
+        
+        <div class="status" id="status">Loading video...</div>
         
         <div class="controls">
-            <button id="loadBtn">Load Secure Video</button>
-        </div>
-        <div id="status" class="status hidden"></div>
-        
-        <div class="video-container">
-            <div id="overlay" class="overlay">
-                <h3>Secure Video Ready to Load</h3>
-                <p>Click "Load Secure Video" to begin</p>
-            </div>
-            <video id="videoPlayer" controls></video>
-            <div class="watermark" id="watermark"></div>
-        </div>
-        
-        <div id="loadingContainer" class="loading-container hidden">
-            <div class="loading-indicator"></div>
-            <div id="loadingText">Initializing secure connection...</div>
-            <div class="progress-container">
-                <progress id="loadProgress" value="0" max="100"></progress>
-            </div>
+            <button id="playPauseBtn">Play</button>
+            <button id="stopBtn">Stop</button>
+            <button id="fullscreenBtn">Fullscreen</button>
         </div>
     </div>
-
+    
     <script>
-        // DOM Elements
+        // Get DOM elements
         const videoPlayer = document.getElementById('videoPlayer');
-        const loadBtn = document.getElementById('loadBtn');
         const status = document.getElementById('status');
-        const overlay = document.getElementById('overlay');
-        const loadingContainer = document.getElementById('loadingContainer');
-        const loadingText = document.getElementById('loadingText');
-        const loadProgress = document.getElementById('loadProgress');
-        const watermark = document.getElementById('watermark');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
         
-        // Configuration
-        const config = {
-            repositoryUrl: 'https://github.com/seeubot/M3u/blob/main/',
-            videoFilename: 'clipsai.mp4',
-            videoQuality: '720p',
-            chunkSize: 2 * 1024 * 1024, // 2MB chunks
-            maxRetries: 3,
-            retryDelay: 1000,
-            sessionId: generateSessionId(),
-            deviceId: getOrCreateDeviceId(),
-            videoContentType: 'video/mp4'
+        // Set video source to the specific file in the repository
+        window.onload = function() {
+            // Set the video source to the file in the repository
+            videoPlayer.src = "clipsai.mp4";
+            
+            // Update status
+            status.textContent = "Playing: clipsai.mp4";
+            
+            // Auto play the video when ready
+            videoPlayer.addEventListener('loadeddata', function() {
+                videoPlayer.play();
+                playPauseBtn.textContent = 'Pause';
+            });
+            
+            // Handle video loading error
+            videoPlayer.addEventListener('error', function() {
+                status.textContent = "Error loading video. Please check if the file exists in the repository.";
+            });
         };
         
-        // Generate a random session ID
-        function generateSessionId() {
-            return [...Array(24)].map(() => Math.floor(Math.random() * 36).toString(36)).join('');
-        }
-        
-        // Get or create a persistent device ID
-        function getOrCreateDeviceId() {
-            let deviceId = localStorage.getItem('deviceId');
-            if (!deviceId) {
-                deviceId = 'device_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
-                localStorage.setItem('deviceId', deviceId);
-            }
-            return deviceId;
-        }
-        
-        // Update status message
-        function showStatus(message, type = 'info') {
-            status.textContent = message;
-            status.className = `status ${type}`;
-            status.classList.remove('hidden');
-        }
-        
-        // Hide status message
-        function hideStatus() {
-            status.classList.add('hidden');
-        }
-        
-        // Generate a temporary request ID to prevent caching and tracking
-        function generateRequestId() {
-            return Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
-        }
-        
-        // Update watermark with session info
-        function updateWatermark() {
-            // Add a dynamic watermark with session and timestamp
-            // This helps identify unauthorized recordings
-            const sessionHash = config.sessionId.substring(0, 8);
-            const timestamp = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
-            watermark.textContent = `ID:${sessionHash} • ${timestamp}`;
-        }
-        
-        // Load and play the video securely
-        async function loadSecureVideo() {
-            try {
-                // Reset the player
-                videoPlayer.src = '';
-                videoPlayer.load();
-                
-                // Show loading state
-                loadBtn.disabled = true;
-                overlay.style.display = 'flex';
-                loadingContainer.classList.remove('hidden');
-                loadProgress.value = 0;
-                
-                // Begin loading process
-                showStatus('Initializing secure player...', 'info');
-                loadingText.textContent = 'Establishing secure connection...';
-                
-                // Create a watermark
-                updateWatermark();
-                setInterval(updateWatermark, 30000); // Update every 30 seconds
-                
-                // Simulate authentication step
-                await new Promise(resolve => setTimeout(resolve, 800));
-                loadProgress.value = 10;
-                loadingText.textContent = 'Authenticating session...';
-                
-                // Setup Media Source Extensions
-                const mediaSource = new MediaSource();
-                const videoUrl = URL.createObjectURL(mediaSource);
-                videoPlayer.src = videoUrl;
-                
-                // Wait for MSE to be ready
-                await new Promise(resolve => {
-                    mediaSource.addEventListener('sourceopen', resolve, { once: true });
-                });
-                
-                loadProgress.value = 20;
-                loadingText.textContent = 'Requesting encrypted content...';
-                
-                // Create source buffer
-                const mimeType = config.videoContentType;
-                const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
-                
-                // Fetch and process video from repository
-                await fetchAndProcessVideo(sourceBuffer);
-                
-                // Finalize the media source
-                mediaSource.endOfStream();
-                
-                // Hide loading elements
-                loadingContainer.classList.add('hidden');
-                overlay.style.display = 'none';
-                
-                // Enable the play button
-                loadBtn.disabled = false;
-                
-                // Play the video
+        // Play/Pause button
+        playPauseBtn.addEventListener('click', function() {
+            if (videoPlayer.paused) {
                 videoPlayer.play();
-                
-                // Show success message
-                showStatus('Video loaded successfully', 'success');
-                
-            } catch (error) {
-                console.error('Error loading video:', error);
-                showStatus(`Failed to load video: ${error.message}`, 'error');
-                loadBtn.disabled = false;
-                loadingContainer.classList.add('hidden');
+                this.textContent = 'Pause';
+            } else {
+                videoPlayer.pause();
+                this.textContent = 'Play';
             }
-        }
+        });
         
-        // Fetch and process video function
-        async function fetchAndProcessVideo(sourceBuffer) {
-            try {
-                loadingText.textContent = 'Initializing repository connection...';
-                loadProgress.value = 30;
-                
-                // First, authenticate with the repository
-                const authResponse = await fetch(`${config.repositoryUrl}/api/auth`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        sessionId: config.sessionId,
-                        deviceId: config.deviceId,
-                        quality: config.videoQuality
-                    })
-                });
-                
-                if (!authResponse.ok) {
-                    throw new Error(`Repository authentication failed: ${authResponse.status}`);
-                }
-                
-                const authData = await authResponse.json();
-                const { accessToken } = authData;
-                
-                loadProgress.value = 40;
-                loadingText.textContent = 'Requesting video from repository...';
-                
-                // Request video from repository using the access token
-                const videoResponse = await fetch(`${config.repositoryUrl}/api/content/videos/${config.videoFilename}`, {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'X-Request-ID': generateRequestId(),
-                        'X-Client-Quality': config.videoQuality
-                    }
-                });
-                
-                if (!videoResponse.ok) {
-                    throw new Error(`Failed to fetch video from repository: ${videoResponse.status}`);
-                }
-                
-                // Get content length if available
-                const contentLength = videoResponse.headers.get('Content-Length');
-                const totalSize = contentLength ? parseInt(contentLength) : 0;
-                
-                // Read the video as a stream
-                const reader = videoResponse.body.getReader();
-                let receivedLength = 0;
-                
-                // Process stream chunks
-                while (true) {
-                    const { done, value } = await reader.read();
-                    
-                    if (done) break;
-                    
-                    // Wait if the source buffer is updating
-                    if (sourceBuffer.updating) {
-                        await new Promise(resolve => {
-                            sourceBuffer.addEventListener('updateend', resolve, { once: true });
-                        });
-                    }
-                    
-                    // Append the data to the source buffer
-                    sourceBuffer.appendBuffer(value);
-                    
-                    // Wait for the append to complete
-                    await new Promise(resolve => {
-                        sourceBuffer.addEventListener('updateend', resolve, { once: true });
-                    });
-                    
-                    // Update progress
-                    receivedLength += value.length;
-                    const progressValue = totalSize 
-                        ? Math.min(40 + Math.floor((receivedLength / totalSize) * 60), 99)
-                        : Math.min(40 + (receivedLength / 1000000), 99);
-                    
-                    loadProgress.value = progressValue;
-                    loadingText.textContent = `Loading video from repository: ${Math.round(progressValue)}%`;
-                    
-                    // Small delay to avoid UI freezing
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-                
-                // Finalize loading
-                loadProgress.value = 100;
-                loadingText.textContent = 'Video successfully loaded from repository';
-                
-            } catch (error) {
-                console.error('Repository fetch error:', error);
-                throw new Error(`Failed to fetch video from repository: ${error.message}`);
+        // Stop button
+        stopBtn.addEventListener('click', function() {
+            videoPlayer.pause();
+            videoPlayer.currentTime = 0;
+            playPauseBtn.textContent = 'Play';
+        });
+        
+        // Fullscreen button
+        fullscreenBtn.addEventListener('click', function() {
+            if (videoPlayer.requestFullscreen) {
+                videoPlayer.requestFullscreen();
+            } else if (videoPlayer.webkitRequestFullscreen) { /* Safari */
+                videoPlayer.webkitRequestFullscreen();
+            } else if (videoPlayer.msRequestFullscreen) { /* IE11 */
+                videoPlayer.msRequestFullscreen();
             }
-        }
+        });
         
-        // Anti-packet capture and security measures
-        function setupSecurityMeasures() {
-            // 1. Prevent right-click on video
-            videoPlayer.addEventListener('contextmenu', e => e.preventDefault());
-            
-            // 2. Modify default XHR behavior to add obfuscation
-            const originalXHR = window.XMLHttpRequest;
-            window.XMLHttpRequest = function() {
-                const xhr = new originalXHR();
-                const originalOpen = xhr.open;
-                
-                xhr.open = function(method, url, ...args) {
-                    // Add random parameters to confuse packet sniffers
-                    const randomParam = `_nc=${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-                    const separator = url.includes('?') ? '&' : '?';
-                    const modifiedUrl = `${url}${separator}${randomParam}`;
-                    
-                    return originalOpen.call(this, method, modifiedUrl, ...args);
-                };
-                
-                return xhr;
-            };
-            
-            // 3. Monitor for network analysis tools
-            let devToolsOpen = false;
-            const devToolsDetector = /./;
-            devToolsDetector.toString = function() {
-                devToolsOpen = true;
-                return 'devtools-detector';
-            };
-            
-            // Regular check for developer tools
-            setInterval(() => {
-                console.log('%c', devToolsDetector);
-                if (devToolsOpen) {
-                    console.clear();
-                    devToolsOpen = false;
-                    showStatus('Warning: Developer tools usage detected', 'error');
-                }
-            }, 1000);
-            
-            // 4. Add a simple form of video protection
-            videoPlayer.addEventListener('play', function() {
-                const interval = setInterval(() => {
-                    // Update the watermark position slightly to make it harder to remove
-                    const offsetX = Math.sin(Date.now() / 10000) * 20;
-                    watermark.style.right = `${20 + offsetX}px`;
-                }, 10000);
-                
-                videoPlayer.addEventListener('pause', function() {
-                    clearInterval(interval);
-                }, { once: true });
-            });
-        }
-        
-        // Set up event listeners and initialize
-        function initialize() {
-            // Setup event listeners
-            loadBtn.addEventListener('click', loadSecureVideo);
-            
-            // Apply security measures
-            setupSecurityMeasures();
-            
-            // Initial status message
-            showStatus('Ready to load video securely', 'info');
-        }
-        
-        // Initialize the player
-        document.addEventListener('DOMContentLoaded', initialize);
+        // Handle video end
+        videoPlayer.addEventListener('ended', function() {
+            playPauseBtn.textContent = 'Play';
+        });
     </script>
 </body>
 </html>
