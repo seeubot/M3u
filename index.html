@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protected Video Player</title>
+    <title>Advanced Protected Media Player</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -18,7 +18,7 @@
             text-align: center;
         }
         
-        .video-container {
+        .media-container {
             background-color: #fff;
             border-radius: 8px;
             padding: 20px;
@@ -28,11 +28,15 @@
             overflow: hidden;
         }
         
-        #videoPlayer {
+        #mediaCanvas {
             width: 100%;
             border-radius: 4px;
             margin-top: 20px;
-            z-index: 1;
+            background-color: #000;
+        }
+        
+        #mediaElement {
+            display: none; /* Hide the actual media element */
         }
         
         .controls {
@@ -63,18 +67,6 @@
             margin-top: 10px;
         }
         
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            pointer-events: none;
-            z-index: 2;
-            opacity: 0.1;
-            display: none;
-        }
-        
         .watermark {
             position: absolute;
             bottom: 60px;
@@ -87,14 +79,48 @@
             z-index: 2;
             user-select: none;
         }
+        
+        #progressBar {
+            width: 100%;
+            height: 5px;
+            background-color: #ddd;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        
+        #progress {
+            height: 100%;
+            background-color: #4285f4;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        #volumeControl {
+            margin-top: 10px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
-    <h1>Protected Video Player</h1>
+    <h1>Advanced Protected Media Player</h1>
     
-    <div class="video-container">
-        <video id="videoPlayer" controls></video>
-        <div id="overlay" class="overlay"></div>
+    <div class="media-container">
+        <!-- Hidden media elements for content loading only -->
+        <video id="mediaElement" crossorigin="anonymous"></video>
+        <audio id="audioElement" crossorigin="anonymous"></audio>
+        
+        <!-- Canvas where we'll render the media frames -->
+        <canvas id="mediaCanvas"></canvas>
+        
+        <!-- Audio context for processing audio -->
+        <div id="audioVisualizer"></div>
+        
+        <!-- Progress bar -->
+        <div id="progressBar">
+            <div id="progress"></div>
+        </div>
+        
         <div id="watermark" class="watermark"></div>
         
         <div class="status" id="status">Initializing secure player...</div>
@@ -102,38 +128,148 @@
         <div class="controls">
             <button id="playPauseBtn">Play</button>
             <button id="stopBtn">Stop</button>
+            <button id="muteBtn">Mute</button>
             <button id="fullscreenBtn">Fullscreen</button>
         </div>
+        
+        <input type="range" id="volumeControl" min="0" max="1" step="0.01" value="1">
     </div>
     
     <script>
         // Get DOM elements
-        const videoPlayer = document.getElementById('videoPlayer');
-        const overlay = document.getElementById('overlay');
+        const mediaElement = document.getElementById('mediaElement');
+        const audioElement = document.getElementById('audioElement');
+        const mediaCanvas = document.getElementById('mediaCanvas');
+        const ctx = mediaCanvas.getContext('2d');
         const watermark = document.getElementById('watermark');
         const status = document.getElementById('status');
         const playPauseBtn = document.getElementById('playPauseBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const muteBtn = document.getElementById('muteBtn');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const volumeControl = document.getElementById('volumeControl');
+        const progress = document.getElementById('progress');
         
         // Security variables
         let sessionToken = "";
-        let chunks = [];
-        let chunkSize = 5; // MB
-        let currentChunk = 0;
-        let totalChunks = 0;
         let userFingerprint = "";
-        let decryptionKey = "";
+        let isPlaying = false;
+        let frameId = null;
+        let mediaSegments = [];
+        let currentSegment = 0;
+        let segmentSources = [];
+        let encryptionKeys = [];
+        let segmentLoaded = false;
+        let frameCounter = 0;
+        let audioContext = null;
+        let audioProcessor = null;
+        let mediaSource = null;
+        let mediaBuffer = null;
+        let lastRequestTime = 0;
+        
+        // Audio processing variables
+        let audioAnalyser = null;
+        let audioGain = null;
+        let audioData = new Uint8Array(0);
+        
+        // Initialize Web Audio API
+        function initAudio() {
+            try {
+                // Create audio context
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create audio source from media element
+                const source = audioContext.createMediaElementSource(mediaElement);
+                
+                // Create analyser for visualizations
+                audioAnalyser = audioContext.createAnalyser();
+                audioAnalyser.fftSize = 256;
+                audioData = new Uint8Array(audioAnalyser.frequencyBinCount);
+                
+                // Create gain node for volume control
+                audioGain = audioContext.createGain();
+                
+                // Connect nodes: source -> gain -> analyser -> destination
+                source.connect(audioGain);
+                audioGain.connect(audioAnalyser);
+                audioAnalyser.connect(audioContext.destination);
+                
+                return true;
+            } catch (error) {
+                console.error("Audio initialization error:", error);
+                return false;
+            }
+        }
+        
+        // Encrypt data using AES (simplified for demonstration)
+        async function encryptData(data, key) {
+            // In a real implementation, use the Web Crypto API
+            // This is a simplified placeholder
+            const encoder = new TextEncoder();
+            const keyData = encoder.encode(key);
+            
+            // Use subtle crypto for real encryption
+            const cryptoKey = await window.crypto.subtle.importKey(
+                "raw", 
+                keyData, 
+                {name: "AES-GCM"}, 
+                false, 
+                ["encrypt"]
+            );
+            
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const encryptedData = await window.crypto.subtle.encrypt(
+                {
+                    name: "AES-GCM",
+                    iv: iv
+                },
+                cryptoKey,
+                data
+            );
+            
+            // Combine IV and encrypted data
+            const result = new Uint8Array(iv.length + encryptedData.byteLength);
+            result.set(iv, 0);
+            result.set(new Uint8Array(encryptedData), iv.length);
+            
+            return result;
+        }
+        
+        // Decrypt data using AES (simplified for demonstration)
+        async function decryptData(data, key) {
+            // Extract IV (first 12 bytes)
+            const iv = data.slice(0, 12);
+            const encryptedData = data.slice(12);
+            
+            const encoder = new TextEncoder();
+            const keyData = encoder.encode(key);
+            
+            // Use subtle crypto for real decryption
+            const cryptoKey = await window.crypto.subtle.importKey(
+                "raw", 
+                keyData, 
+                {name: "AES-GCM"}, 
+                false, 
+                ["decrypt"]
+            );
+            
+            const decryptedData = await window.crypto.subtle.decrypt(
+                {
+                    name: "AES-GCM",
+                    iv: iv
+                },
+                cryptoKey,
+                encryptedData
+            );
+            
+            return decryptedData;
+        }
         
         // Generate a random session token
         function generateSessionToken(length = 32) {
-            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            let result = '';
-            const charactersLength = characters.length;
-            for (let i = 0; i < length; i++) {
-                result += characters.charAt(Math.floor(Math.random() * charactersLength));
-            }
-            return result;
+            const array = new Uint8Array(length);
+            window.crypto.getRandomValues(array);
+            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
         }
         
         // Generate a fingerprint based on browser information
@@ -143,16 +279,18 @@
             const browser = navigator.userAgent;
             const languages = navigator.languages ? navigator.languages.join(',') : navigator.language;
             
-            return btoa(screenInfo + timeZone + browser + languages).substring(0, 24);
-        }
-        
-        // Simple XOR "encryption" for demo purposes (in real implementation, use proper encryption)
-        function xorEncryptDecrypt(data, key) {
-            let result = '';
-            for (let i = 0; i < data.length; i++) {
-                result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-            }
-            return result;
+            // Use subtle crypto to hash the fingerprint
+            const data = screenInfo + timeZone + browser + languages;
+            const encoder = new TextEncoder();
+            const dataBuffer = encoder.encode(data);
+            
+            return window.crypto.subtle.digest('SHA-256', dataBuffer)
+                .then(hash => {
+                    return Array.from(new Uint8Array(hash))
+                        .map(b => b.toString(16).padStart(2, '0'))
+                        .join('')
+                        .substring(0, 24);
+                });
         }
         
         // Create dynamic watermark with user information
@@ -168,180 +306,453 @@
             }, 30000);
         }
         
-        // Simulate requesting video chunks securely
-        async function requestVideoChunk(index) {
-            status.textContent = `Loading chunk ${index + 1}/${totalChunks}...`;
-            
-            // Simulate server authentication and secure chunk retrieval
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    // In a real implementation, this would make an authenticated HTTPS request
-                    // with the session token and receive an encrypted chunk
-                    resolve(`clipsai.mp4?chunk=${index}&token=${sessionToken}&fp=${userFingerprint}`);
-                }, 500);
-            });
-        }
-        
         // Initialize security measures
         async function initSecurity() {
             // Generate session token
             sessionToken = generateSessionToken();
             
             // Generate user fingerprint
-            userFingerprint = generateFingerprint();
+            userFingerprint = await generateFingerprint();
             
-            // Generate encryption key based on session and fingerprint
-            decryptionKey = sessionToken.substring(0, 16) + userFingerprint.substring(0, 16);
+            // Create encryption keys for segments
+            for (let i = 0; i < 5; i++) {
+                encryptionKeys.push(generateSessionToken(16));
+            }
             
-            // Simulate server handshake
             status.textContent = "Establishing secure connection...";
             
             return new Promise((resolve) => {
                 setTimeout(() => {
-                    status.textContent = "Connection secured. Preparing video...";
+                    status.textContent = "Connection secured. Preparing media...";
                     resolve();
                 }, 1000);
             });
         }
         
-        // Apply visual protection
-        function applyVisualProtection() {
-            // Create random noise pattern for overlay (makes screen recording more difficult)
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = 100;
-            canvas.height = 100;
+        // Create a secure URL that doesn't reveal the actual media path
+        function createSecureURL(index, mediaType) {
+            // Instead of direct URLs, use a proxy endpoint that validates session tokens
+            // In a real implementation, this would be your server endpoint
+            const proxyEndpoint = "secureMediaProxy";
             
-            // Create noise pattern
-            const imageData = ctx.createImageData(100, 100);
-            const data = imageData.data;
+            // Create a secure payload that includes:
+            // 1. Session token for authentication
+            // 2. User fingerprint for tracking
+            // 3. Media type and index
+            // 4. Timestamp to prevent replay attacks
             
-            for (let i = 0; i < data.length; i += 4) {
-                data[i] = Math.random() * 255;     // red
-                data[i + 1] = Math.random() * 255; // green
-                data[i + 2] = Math.random() * 255; // blue
-                data[i + 3] = 5;                   // alpha (very transparent)
-            }
+            const payload = {
+                session: sessionToken,
+                fingerprint: userFingerprint,
+                mediaType: mediaType,
+                segmentIndex: index,
+                timestamp: Date.now()
+            };
             
-            ctx.putImageData(imageData, 0, 0);
-            overlay.style.backgroundImage = `url(${canvas.toDataURL()})`;
-            overlay.style.display = 'block';
+            // In a real implementation, this would be encrypted and sent to your server
+            // Then your server would validate and stream the correct content
             
-            // Create and position watermark
-            createWatermark();
+            // For demo purposes, simulate this with a random parameter to avoid caching
+            const randomParam = Math.floor(Math.random() * 1000000);
+            
+            // Encode the payload
+            const encodedPayload = btoa(JSON.stringify(payload));
+            
+            // Generate a secure URL that doesn't reveal the actual media source
+            return `${proxyEndpoint}?token=${encodedPayload}&nocache=${randomParam}`;
         }
         
-        // Check if debugging tools are open (basic detection)
-        function detectDevTools() {
-            const threshold = 160;
-            const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-            const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+        // Simulate creating encrypted media segments
+        function createMediaSegments() {
+            // For the demo, we'll simulate segment URLs through a proxy
+            segmentSources = [];
             
-            if (widthThreshold || heightThreshold) {
-                // Potential DevTools detected
-                status.textContent = "Security warning: Developer tools detected";
-                return true;
+            // Generate secure URLs for each segment that don't reveal actual paths
+            for (let i = 0; i < 5; i++) {
+                segmentSources.push(createSecureURL(i, "video"));
             }
-            return false;
+            
+            // In a real implementation, you'd have separate handlers for different media types
+        }
+        
+        // Simulate media loading with added protection against URL extraction
+        function fetchEncryptedMedia(segmentIndex) {
+            return new Promise((resolve, reject) => {
+                // Add rate limiting to prevent scraping
+                const now = Date.now();
+                if (now - lastRequestTime < 500) {
+                    // Too many requests too quickly
+                    setTimeout(() => fetchEncryptedMedia(segmentIndex).then(resolve).catch(reject), 500);
+                    return;
+                }
+                lastRequestTime = now;
+                
+                // In a real implementation, this would fetch an encrypted blob
+                // For demo purposes, we'll simulate media loading
+                
+                // Create a random delay to simulate network activity
+                const delay = 300 + Math.random() * 500;
+                
+                setTimeout(() => {
+                    // Simulate successful media loading
+                    // In a real implementation, this would be decrypted media data
+                    resolve({
+                        mediaType: 'video/mp4',
+                        // This would be the decrypted media data
+                        data: new ArrayBuffer(1024)
+                    });
+                }, delay);
+            });
+        }
+        
+        // Render a frame from the media to canvas
+        function renderMediaFrame() {
+            if (!isPlaying) return;
+            
+            // Get current dimensions
+            const width = mediaElement.videoWidth;
+            const height = mediaElement.videoHeight;
+            
+            // Set canvas dimensions to match video
+            if (mediaCanvas.width !== width || mediaCanvas.height !== height) {
+                mediaCanvas.width = width;
+                mediaCanvas.height = height;
+            }
+            
+            // Draw the current video frame onto the canvas
+            ctx.drawImage(mediaElement, 0, 0, width, height);
+            
+            // Apply dynamic watermark to the frame
+            applyWatermarkToFrame(width, height);
+            
+            // Apply obfuscation to parts of the frame periodically
+            frameCounter++;
+            if (frameCounter % 30 === 0) { // Every 30 frames
+                applyFrameObfuscation(width, height);
+            }
+            
+            // Process audio data if available
+            if (audioAnalyser) {
+                audioAnalyser.getByteFrequencyData(audioData);
+                // Use audioData for visualizations or further processing
+            }
+            
+            // Update progress bar
+            if (mediaElement.duration) {
+                progress.style.width = `${(mediaElement.currentTime / mediaElement.duration) * 100}%`;
+            }
+            
+            // Request next frame
+            frameId = requestAnimationFrame(renderMediaFrame);
+        }
+        
+        // Apply dynamic watermark directly to frame
+        function applyWatermarkToFrame(width, height) {
+            // Save current state
+            ctx.save();
+            
+            // Set up text for watermark
+            ctx.font = "16px Arial";
+            ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+            
+            // Generate a unique watermark for each user
+            const userId = userFingerprint.substring(0, 8);
+            const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+            const watermarkText = `ID: ${userId} • ${timestamp}`;
+            
+            // Draw watermark in a random position
+            const x = width * 0.6 + (Math.random() * 0.1 * width);
+            const y = height * 0.8 + (Math.random() * 0.1 * height);
+            
+            ctx.fillText(watermarkText, x, y);
+            
+            // Add steganographic data (hidden data within the image)
+            addSteganographicData(width, height);
+            
+            // Restore state
+            ctx.restore();
+        }
+        
+        // Add hidden forensic data within the image pixels
+        function addSteganographicData(width, height) {
+            // Get current image data
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            
+            // Create a hidden fingerprint in the least significant bits
+            // This is a very basic example - real implementation would be more sophisticated
+            const hiddenData = `${userFingerprint}|${Date.now()}`;
+            const hiddenBytes = new TextEncoder().encode(hiddenData);
+            
+            // Only modify a small portion of the image to avoid visual artifacts
+            const startPos = Math.floor(Math.random() * (data.length / 4 - hiddenBytes.length * 8));
+            
+            // Embed each bit of the hidden data in the LSB of pixel values
+            for (let i = 0; i < hiddenBytes.length; i++) {
+                const byte = hiddenBytes[i];
+                
+                for (let bit = 0; bit < 8; bit++) {
+                    const pixelPos = (startPos + i * 8 + bit) * 4;
+                    
+                    // Get the bit value
+                    const bitVal = (byte >> bit) & 1;
+                    
+                    // Modify the least significant bit of the blue channel
+                    // This is virtually invisible to the human eye
+                    data[pixelPos + 2] = (data[pixelPos + 2] & 0xFE) | bitVal;
+                }
+            }
+            
+            // Put the modified image data back
+            ctx.putImageData(imageData, 0, 0);
+        }
+        
+        // Apply periodic obfuscation to make frame capture harder
+        function applyFrameObfuscation(width, height) {
+            // Only obfuscate if we're playing
+            if (!isPlaying) return;
+            
+            // Save state
+            ctx.save();
+            
+            // Create random sections to slightly alter
+            // This makes frame-by-frame reconstruction from captured packets harder
+            for (let i = 0; i < 5; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const w = 2 + Math.random() * 5;
+                const h = 2 + Math.random() * 5;
+                
+                // Apply a subtle effect that's nearly invisible to viewers 
+                // but disrupts packet capture analysis
+                ctx.globalAlpha = 0.05;
+                ctx.globalCompositeOperation = "difference";
+                ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.fillRect(x, y, w, h);
+            }
+            
+            // Restore state
+            ctx.restore();
+        }
+        
+        // Load a media segment
+        function loadMediaSegment(index) {
+            return new Promise((resolve, reject) => {
+                status.textContent = `Loading segment ${index + 1}/5...`;
+                
+                // Simulated secure fetch with encryption
+                fetchEncryptedMedia(index).then(mediaData => {
+                    // In a real implementation, mediaData would be a decrypted blob
+                    // We would then create an object URL for the media element
+                    
+                    // For the demo, we'll simulate this with a direct URL
+                    // In a real implementation, this would be a blob URL of the decrypted data
+                    
+                    // Create a secure URL that doesn't expose the actual media path
+                    const secureURL = createSecureURL(index, "video");
+                    mediaElement.src = "clipsai.mp4"; // Demo only - in reality would be blob URL
+                    
+                    // Wait for the media to be ready
+                    mediaElement.onloadeddata = () => {
+                        segmentLoaded = true;
+                        status.textContent = `Segment ${index + 1} ready`;
+                        resolve();
+                    };
+                    
+                    mediaElement.onerror = () => {
+                        reject(new Error("Failed to load media segment"));
+                    };
+                }).catch(error => {
+                    reject(error);
+                });
+            });
+        }
+        
+        // Handle segment ended event
+        function handleSegmentEnded() {
+            currentSegment++;
+            
+            if (currentSegment >= segmentSources.length) {
+                // All segments played
+                isPlaying = false;
+                playPauseBtn.textContent = 'Play';
+                currentSegment = 0;
+                return;
+            }
+            
+            // Load and play next segment
+            loadMediaSegment(currentSegment).then(() => {
+                if (isPlaying) {
+                    mediaElement.play();
+                }
+            }).catch(error => {
+                status.textContent = `Error: ${error.message}`;
+            });
+        }
+        
+        // Init canvas for size
+        function initCanvas() {
+            // Set initial canvas size based on container
+            const container = document.querySelector('.media-container');
+            mediaCanvas.width = container.clientWidth - 40; // Account for padding
+            mediaCanvas.height = (mediaCanvas.width * 9) / 16; // 16:9 aspect ratio
+        }
+        
+        // Implement Media Source Extensions for segmented streaming
+        function initMediaSource() {
+            try {
+                mediaSource = new MediaSource();
+                mediaElement.src = URL.createObjectURL(mediaSource);
+                
+                mediaSource.addEventListener('sourceopen', function() {
+                    mediaBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+                    
+                    mediaBuffer.addEventListener('updateend', function() {
+                        // Buffer is updated, ready to append more data
+                        status.textContent = "Media buffer ready";
+                    });
+                });
+                
+                return true;
+            } catch (error) {
+                console.error("Media Source Extensions error:", error);
+                return false;
+            }
         }
         
         // Main initialization
         window.onload = async function() {
+            initCanvas();
+            
             // Initialize security
             await initSecurity();
             
+            // Initialize audio processing
+            const audioInitialized = initAudio();
+            if (!audioInitialized) {
+                status.textContent = "Warning: Audio processing not available";
+            }
+            
+            // Initialize Media Source Extensions
+            initMediaSource();
+            
             // Apply visual protections
-            applyVisualProtection();
+            createWatermark();
             
-            // Set up periodic security checks
-            setInterval(detectDevTools, 1000);
+            // Create video segments
+            createMediaSegments();
             
-            // Simulate checking file segments and setting up video
-            totalChunks = 5; // Simulate 5 chunks
+            // Load first segment
+            try {
+                await loadMediaSegment(0);
+                status.textContent = "Protected media ready";
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+            }
             
-            // In a real implementation, we would request each chunk securely
-            // and assemble them, or use an encrypted HLS/DASH stream
+            // Handle media ended event
+            mediaElement.addEventListener('ended', handleSegmentEnded);
             
-            // For demonstration, we'll just set the source directly
-            videoPlayer.src = "clipsai.mp4"; 
-            
-            // Add custom headers when fetching video content
-            const originalFetch = window.fetch;
-            window.fetch = function(url, options) {
-                // If this is a video file request, add authentication
-                if (url.toString().includes('clipsai.mp4')) {
-                    if (!options) options = {};
-                    if (!options.headers) options.headers = {};
-                    
-                    options.headers['X-Auth-Token'] = sessionToken;
-                    options.headers['X-Client-Fingerprint'] = userFingerprint;
+            // Initialize volume control
+            volumeControl.addEventListener('input', function() {
+                if (audioGain) {
+                    audioGain.gain.value = this.value;
                 }
-                return originalFetch.call(this, url, options);
-            };
-            
-            status.textContent = "Protected video ready";
-            
-            // Auto play the video when ready
-            videoPlayer.addEventListener('loadeddata', function() {
-                videoPlayer.play();
-                playPauseBtn.textContent = 'Pause';
-            });
-            
-            // Handle video loading error
-            videoPlayer.addEventListener('error', function() {
-                status.textContent = "Error loading protected video. Security verification failed.";
+                mediaElement.volume = this.value;
             });
         };
         
         // Play/Pause button
         playPauseBtn.addEventListener('click', function() {
-            if (videoPlayer.paused) {
-                videoPlayer.play();
-                this.textContent = 'Pause';
-            } else {
-                videoPlayer.pause();
+            if (!segmentLoaded) return;
+            
+            if (isPlaying) {
+                mediaElement.pause();
+                cancelAnimationFrame(frameId);
+                isPlaying = false;
                 this.textContent = 'Play';
+            } else {
+                // Resume audio context if it was suspended
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                
+                mediaElement.play();
+                isPlaying = true;
+                this.textContent = 'Pause';
+                renderMediaFrame();
             }
         });
         
         // Stop button
         stopBtn.addEventListener('click', function() {
-            videoPlayer.pause();
-            videoPlayer.currentTime = 0;
+            mediaElement.pause();
+            mediaElement.currentTime = 0;
+            cancelAnimationFrame(frameId);
+            isPlaying = false;
             playPauseBtn.textContent = 'Play';
+            progress.style.width = '0%';
+        });
+        
+        // Mute button
+        muteBtn.addEventListener('click', function() {
+            mediaElement.muted = !mediaElement.muted;
+            
+            if (audioGain) {
+                audioGain.gain.value = mediaElement.muted ? 0 : volumeControl.value;
+            }
+            
+            this.textContent = mediaElement.muted ? 'Unmute' : 'Mute';
         });
         
         // Fullscreen button
         fullscreenBtn.addEventListener('click', function() {
-            if (videoPlayer.requestFullscreen) {
-                videoPlayer.requestFullscreen();
-            } else if (videoPlayer.webkitRequestFullscreen) { /* Safari */
-                videoPlayer.webkitRequestFullscreen();
-            } else if (videoPlayer.msRequestFullscreen) { /* IE11 */
-                videoPlayer.msRequestFullscreen();
+            if (mediaCanvas.requestFullscreen) {
+                mediaCanvas.requestFullscreen();
+            } else if (mediaCanvas.webkitRequestFullscreen) { /* Safari */
+                mediaCanvas.webkitRequestFullscreen();
+            } else if (mediaCanvas.msRequestFullscreen) { /* IE11 */
+                mediaCanvas.msRequestFullscreen();
             }
         });
         
-        // Handle video end
-        videoPlayer.addEventListener('ended', function() {
-            playPauseBtn.textContent = 'Play';
-        });
-        
-        // Prevent right-click on video
-        videoPlayer.addEventListener('contextmenu', function(e) {
+        // Prevent right-click context menu
+        mediaCanvas.addEventListener('contextmenu', function(e) {
             e.preventDefault();
             return false;
         });
         
-        // Block keyboard shortcuts that could be used for recording/capture
+        // Add extra protection against keyboard shortcuts for screen capturing
         document.addEventListener('keydown', function(e) {
             // Prevent common screen capture shortcuts
-            if ((e.ctrlKey && (e.key === 'p' || e.key === 's' || e.key === 'g')) || 
-                (e.key === 'F12') || 
-                (e.ctrlKey && e.shiftKey && e.key === 'i')) {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 's' || e.key === 'g')) {
                 e.preventDefault();
                 return false;
             }
+        });
+        
+        // Handle clicks on canvas for play/pause
+        mediaCanvas.addEventListener('click', function() {
+            playPauseBtn.click();
+        });
+        
+        // Handle window resizing
+        window.addEventListener('resize', function() {
+            initCanvas();
+            if (isPlaying) {
+                renderMediaFrame();
+            }
+        });
+        
+        // Handle progress bar seeking
+        document.getElementById('progressBar').addEventListener('click', function(e) {
+            if (!mediaElement.duration) return;
+            
+            const rect = this.getBoundingClientRect();
+            const pos = (e.clientX - rect.left) / rect.width;
+            mediaElement.currentTime = pos * mediaElement.duration;
+            
+            progress.style.width = `${pos * 100}%`;
         });
     </script>
 </body>
