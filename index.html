@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Video Player</title>
+    <title>Protected Video Player</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -24,12 +24,15 @@
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
         }
         
         #videoPlayer {
             width: 100%;
             border-radius: 4px;
             margin-top: 20px;
+            z-index: 1;
         }
         
         .controls {
@@ -59,15 +62,42 @@
             font-style: italic;
             margin-top: 10px;
         }
+        
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 2;
+            opacity: 0.1;
+            display: none;
+        }
+        
+        .watermark {
+            position: absolute;
+            bottom: 60px;
+            right: 30px;
+            color: white;
+            font-size: 18px;
+            opacity: 0.6;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none;
+            z-index: 2;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
-    <h1>Local Video Player</h1>
+    <h1>Protected Video Player</h1>
     
     <div class="video-container">
         <video id="videoPlayer" controls></video>
+        <div id="overlay" class="overlay"></div>
+        <div id="watermark" class="watermark"></div>
         
-        <div class="status" id="status">Loading video...</div>
+        <div class="status" id="status">Initializing secure player...</div>
         
         <div class="controls">
             <button id="playPauseBtn">Play</button>
@@ -79,18 +109,177 @@
     <script>
         // Get DOM elements
         const videoPlayer = document.getElementById('videoPlayer');
+        const overlay = document.getElementById('overlay');
+        const watermark = document.getElementById('watermark');
         const status = document.getElementById('status');
         const playPauseBtn = document.getElementById('playPauseBtn');
         const stopBtn = document.getElementById('stopBtn');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
         
-        // Set video source to the specific file in the repository
-        window.onload = function() {
-            // Set the video source to the file in the repository
-            videoPlayer.src = "clipsai.mp4";
+        // Security variables
+        let sessionToken = "";
+        let chunks = [];
+        let chunkSize = 5; // MB
+        let currentChunk = 0;
+        let totalChunks = 0;
+        let userFingerprint = "";
+        let decryptionKey = "";
+        
+        // Generate a random session token
+        function generateSessionToken(length = 32) {
+            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            const charactersLength = characters.length;
+            for (let i = 0; i < length; i++) {
+                result += characters.charAt(Math.floor(Math.random() * charactersLength));
+            }
+            return result;
+        }
+        
+        // Generate a fingerprint based on browser information
+        function generateFingerprint() {
+            const screenInfo = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const browser = navigator.userAgent;
+            const languages = navigator.languages ? navigator.languages.join(',') : navigator.language;
             
-            // Update status
-            status.textContent = "Playing: clipsai.mp4";
+            return btoa(screenInfo + timeZone + browser + languages).substring(0, 24);
+        }
+        
+        // Simple XOR "encryption" for demo purposes (in real implementation, use proper encryption)
+        function xorEncryptDecrypt(data, key) {
+            let result = '';
+            for (let i = 0; i < data.length; i++) {
+                result += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return result;
+        }
+        
+        // Create dynamic watermark with user information
+        function createWatermark() {
+            const date = new Date().toISOString();
+            const id = userFingerprint.substring(0, 8);
+            watermark.textContent = `ID: ${id} • ${date}`;
+            
+            // Update watermark position randomly
+            setInterval(() => {
+                watermark.style.right = `${20 + Math.random() * 60}px`;
+                watermark.style.bottom = `${40 + Math.random() * 40}px`;
+            }, 30000);
+        }
+        
+        // Simulate requesting video chunks securely
+        async function requestVideoChunk(index) {
+            status.textContent = `Loading chunk ${index + 1}/${totalChunks}...`;
+            
+            // Simulate server authentication and secure chunk retrieval
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    // In a real implementation, this would make an authenticated HTTPS request
+                    // with the session token and receive an encrypted chunk
+                    resolve(`clipsai.mp4?chunk=${index}&token=${sessionToken}&fp=${userFingerprint}`);
+                }, 500);
+            });
+        }
+        
+        // Initialize security measures
+        async function initSecurity() {
+            // Generate session token
+            sessionToken = generateSessionToken();
+            
+            // Generate user fingerprint
+            userFingerprint = generateFingerprint();
+            
+            // Generate encryption key based on session and fingerprint
+            decryptionKey = sessionToken.substring(0, 16) + userFingerprint.substring(0, 16);
+            
+            // Simulate server handshake
+            status.textContent = "Establishing secure connection...";
+            
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    status.textContent = "Connection secured. Preparing video...";
+                    resolve();
+                }, 1000);
+            });
+        }
+        
+        // Apply visual protection
+        function applyVisualProtection() {
+            // Create random noise pattern for overlay (makes screen recording more difficult)
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 100;
+            canvas.height = 100;
+            
+            // Create noise pattern
+            const imageData = ctx.createImageData(100, 100);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = Math.random() * 255;     // red
+                data[i + 1] = Math.random() * 255; // green
+                data[i + 2] = Math.random() * 255; // blue
+                data[i + 3] = 5;                   // alpha (very transparent)
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            overlay.style.backgroundImage = `url(${canvas.toDataURL()})`;
+            overlay.style.display = 'block';
+            
+            // Create and position watermark
+            createWatermark();
+        }
+        
+        // Check if debugging tools are open (basic detection)
+        function detectDevTools() {
+            const threshold = 160;
+            const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+            const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+            
+            if (widthThreshold || heightThreshold) {
+                // Potential DevTools detected
+                status.textContent = "Security warning: Developer tools detected";
+                return true;
+            }
+            return false;
+        }
+        
+        // Main initialization
+        window.onload = async function() {
+            // Initialize security
+            await initSecurity();
+            
+            // Apply visual protections
+            applyVisualProtection();
+            
+            // Set up periodic security checks
+            setInterval(detectDevTools, 1000);
+            
+            // Simulate checking file segments and setting up video
+            totalChunks = 5; // Simulate 5 chunks
+            
+            // In a real implementation, we would request each chunk securely
+            // and assemble them, or use an encrypted HLS/DASH stream
+            
+            // For demonstration, we'll just set the source directly
+            videoPlayer.src = "clipsai.mp4"; 
+            
+            // Add custom headers when fetching video content
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options) {
+                // If this is a video file request, add authentication
+                if (url.toString().includes('clipsai.mp4')) {
+                    if (!options) options = {};
+                    if (!options.headers) options.headers = {};
+                    
+                    options.headers['X-Auth-Token'] = sessionToken;
+                    options.headers['X-Client-Fingerprint'] = userFingerprint;
+                }
+                return originalFetch.call(this, url, options);
+            };
+            
+            status.textContent = "Protected video ready";
             
             // Auto play the video when ready
             videoPlayer.addEventListener('loadeddata', function() {
@@ -100,7 +289,7 @@
             
             // Handle video loading error
             videoPlayer.addEventListener('error', function() {
-                status.textContent = "Error loading video. Please check if the file exists in the repository.";
+                status.textContent = "Error loading protected video. Security verification failed.";
             });
         };
         
@@ -136,6 +325,23 @@
         // Handle video end
         videoPlayer.addEventListener('ended', function() {
             playPauseBtn.textContent = 'Play';
+        });
+        
+        // Prevent right-click on video
+        videoPlayer.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            return false;
+        });
+        
+        // Block keyboard shortcuts that could be used for recording/capture
+        document.addEventListener('keydown', function(e) {
+            // Prevent common screen capture shortcuts
+            if ((e.ctrlKey && (e.key === 'p' || e.key === 's' || e.key === 'g')) || 
+                (e.key === 'F12') || 
+                (e.ctrlKey && e.shiftKey && e.key === 'i')) {
+                e.preventDefault();
+                return false;
+            }
         });
     </script>
 </body>
